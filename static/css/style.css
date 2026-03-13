@@ -1,0 +1,949 @@
+/*
+ * style.css
+ * =========
+ * Complete styles for the Tax Invoice Web Application.
+ * Uses vanilla CSS Grid and Flexbox — no frameworks.
+ * Includes both screen and print styles.
+ */
+
+/* ---- RESET & BASE ---- */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Import Roboto from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+body {
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    color: #1A1A1A;
+    background: #e8ecf1;
+    display: flex;
+    min-height: 100vh;
+}
+
+/* ============================================================
+   SIDEBAR — Fixed left navigation panel
+   ============================================================ */
+.sidebar {
+    width: 230px;
+    min-width: 230px;
+    background: #f4f6fb;
+    border-right: 1px solid #dce1ea;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    overflow-y: auto;
+}
+
+/* Sidebar header / logo area */
+.sidebar-header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid #dce1ea;
+}
+
+.sidebar-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1A1A1A;
+    letter-spacing: 0.5px;
+}
+
+.sidebar-header p {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+/* Sidebar navigation links */
+.sidebar-nav {
+    padding: 12px 0;
+    flex: 1;
+}
+
+.sidebar-nav button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    text-align: left;
+}
+
+.sidebar-nav button:hover {
+    background: #e5e9f2;
+    color: #1A1A1A;
+}
+
+/* Active sidebar button */
+.sidebar-nav button.active {
+    background: #2563EB;
+    color: #ffffff;
+}
+
+.sidebar-nav button .icon {
+    margin-right: 12px;
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+/* ============================================================
+   MAIN WORKSPACE — Right content area
+   ============================================================ */
+.main-workspace {
+    margin-left: 230px;
+    flex: 1;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* ============================================================
+   PANELS — Customer, Product, Saved Invoices, Owner panels
+   ============================================================ */
+.panel {
+    display: none;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 28px;
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 24px;
+}
+
+.panel.active {
+    display: block;
+}
+
+/* Invoice panel visibility (shown only on Create Invoice tab) */
+.invoice-panel {
+    display: none;
+    width: 100%;
+}
+
+.invoice-panel.active {
+    display: block;
+}
+
+.panel h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1A1A1A;
+}
+
+/* Panel form grid */
+.panel-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+}
+
+.panel-form .full-width {
+    grid-column: 1 / -1;
+}
+
+.panel-form label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.panel-form input,
+.panel-form select,
+.panel-form textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 13px;
+}
+
+.panel-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+/* Panel buttons */
+.panel-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.btn:hover {
+    opacity: 0.85;
+}
+
+.btn-primary {
+    background: #2563EB;
+    color: #fff;
+}
+
+.btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+/* Data list table in panels */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 13px;
+}
+
+.data-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* ============================================================
+   A4 INVOICE CONTAINER — The paper on the desk
+   ============================================================ */
+.a4-container {
+    width: 210mm;
+    min-height: auto; /* FIXED: Changed from 297mm to auto to stop page spillover */
+    background: #ffffff;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    margin: 0 auto;
+    padding: 0;
+    position: relative;
+    border: 2px solid #1A1A1A; 
+    box-sizing: border-box; 
+}
+
+/* ============================================================
+   INVOICE DOCUMENT — All internal structure
+   ============================================================ */
+
+/* Title */
+.invoice-title {
+    text-align: center;
+    padding: 10px 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #1A1A1A;
+}
+
+/* Top section: owner/buyer info + invoice fields side by side */
+.invoice-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 2px solid #1A1A1A;
+}
+
+/* Left column: Owner + Consignee + Buyer */
+.invoice-left {
+    border-right: 2px solid #1A1A1A;
+}
+
+.invoice-left .section {
+    padding: 6px 10px;
+    border-bottom: 1px solid #1A1A1A; 
+}
+
+.invoice-left .section:last-child {
+    border-bottom: none;
+}
+
+.invoice-left .section-label {
+    font-size: 10px;
+    font-weight: 400;
+    color: #6b7280;
+    margin-bottom: 2px;
+}
+
+.invoice-left .company-name {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.invoice-left .info-line {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* Right column: Invoice metadata fields */
+.invoice-right {
+    display: flex;
+    flex-direction: column;
+}
+
+.invoice-right .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid #1A1A1A; 
+    min-height: 28px;
+}
+
+.invoice-right .field-row:last-child {
+    border-bottom: none;
+}
+
+.invoice-right .field-row.full {
+    grid-template-columns: 1fr;
+}
+
+.invoice-right .field {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-right: 1px solid #1A1A1A; 
+    display: flex;
+    flex-direction: column;
+}
+
+.invoice-right .field:last-child {
+    border-right: none;
+}
+
+.invoice-right .field-label {
+    font-size: 10px;
+    color: #6b7280;
+}
+
+.invoice-right .field-value {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ============================================================
+   PRODUCT TABLE — Inside the invoice
+   ============================================================ */
+.product-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.product-table th,
+.product-table td {
+    border: 1px solid #1A1A1A; 
+    padding: 4px 6px;
+    font-size: 12px;
+    text-align: center;
+    vertical-align: top;
+}
+
+.product-table th {
+    background: transparent;
+    font-weight: 700;
+    font-size: 11px;
+    border-top: 2px solid #1A1A1A;
+    border-bottom: 2px solid #1A1A1A;
+}
+
+.product-table td.text-left {
+    text-align: left;
+}
+
+.product-table td.text-right {
+    text-align: right;
+}
+
+/* Make the description column wider */
+.product-table .col-desc {
+    width: 30%;
+}
+
+.product-table .col-sl {
+    width: 8%;
+}
+
+.row-sl-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.row-action-controls {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.row-action-btn {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #1A1A1A;
+    background: #f9fafb;
+    border-radius: 2px;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    color: #1f2937;
+}
+
+.row-action-btn:hover {
+    background: #e5e7eb;
+}
+
+.product-table .col-hsn {
+    width: 10%;
+}
+
+.product-table .col-qty {
+    width: 10%;
+}
+
+.product-table .col-rate {
+    width: 10%;
+}
+
+.product-table .col-per {
+    width: 8%;
+}
+
+.product-table .col-disc {
+    width: 8%;
+}
+
+.product-table .col-amount {
+    width: 14%;
+}
+
+/* Total row */
+.product-table .total-row td {
+    font-weight: 700;
+    border-top: 2px solid #1A1A1A;
+}
+
+/* ============================================================
+   INVOICE INPUTS — Edit mode styling
+   ============================================================ */
+.invoice-input {
+    border: none;
+    background: transparent;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    color: #1A1A1A;
+    width: 100%;
+    outline: none;
+    padding: 2px 0;
+}
+
+.invoice-input:focus {
+    background: #fffde7;
+}
+
+.invoice-input.bold {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.invoice-select {
+    border: none;
+    background: transparent;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    color: #1A1A1A;
+    cursor: pointer;
+    outline: none;
+    padding: 2px 0;
+    width: 100%;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Plus/minus buttons for quantity/rate */
+.qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.qty-controls input {
+    width: 50px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    outline: none;
+}
+
+.qty-controls input:focus {
+    background: #fffde7;
+}
+
+.qty-btn {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #1A1A1A;
+    background: #f9fafb;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    color: #374151;
+    line-height: 1;
+    padding: 0;
+}
+
+.qty-btn:hover {
+    background: #e5e7eb;
+}
+
+/* ============================================================
+   FOOTER SECTIONS — Totals, Tax Summary, Declaration
+   ============================================================ */
+
+/* Amount chargeable row */
+.amount-chargeable {
+    padding: 6px 10px;
+    border-top: 2px solid #1A1A1A;
+    border-bottom: 1px solid #1A1A1A;
+    display: flex;
+    justify-content: space-between;
+}
+
+.amount-chargeable .label {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.amount-chargeable .words {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.amount-chargeable .eoe {
+    font-size: 11px;
+    text-align: right;
+}
+
+/* Tax summary table */
+.tax-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tax-summary-table th,
+.tax-summary-table td {
+    border: 1px solid #1A1A1A; 
+    padding: 4px 8px;
+    font-size: 11px;
+    text-align: center;
+}
+
+.tax-summary-table th {
+    font-weight: 700;
+    font-size: 10px;
+}
+
+.tax-summary-table .total-row td {
+    font-weight: 700;
+}
+
+/* Tax words row */
+.tax-words {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-bottom: 1px solid #1A1A1A; 
+}
+
+/* Declaration + Signatory */
+.invoice-footer-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 80px;
+}
+
+.declaration {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-right: 1px solid #1A1A1A; 
+}
+
+.declaration strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.signatory {
+    padding: 6px 10px;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: right;
+}
+
+.signatory .for-company {
+    font-weight: 700;
+}
+
+.signatory .auth-label {
+    font-size: 10px;
+    color: #6b7280;
+    margin-top: auto;
+}
+
+/* Computer generated text */
+.computer-generated {
+    text-align: center;
+    padding: 6px;
+    font-size: 11px;
+    color: #6b7280;
+    border-top: 1px solid #1A1A1A; 
+}
+
+/* ============================================================
+   TAX TYPE SELECTOR — Above the product table totals
+   ============================================================ */
+.tax-selector {
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    border-bottom: 1px solid #1A1A1A;
+}
+
+.tax-selector label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.tax-selector input[type="radio"] {
+    cursor: pointer;
+}
+
+.tax-selector .custom-rate-input {
+    width: 50px;
+    padding: 2px 4px;
+    border: 1px solid #1A1A1A;
+    border-radius: 2px;
+    font-size: 12px;
+}
+
+/* ============================================================
+   ACTION BAR — Below invoice (Print, Download, Save)
+   ============================================================ */
+.action-bar {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding-bottom: 40px;
+}
+
+.action-bar .btn {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* ============================================================
+   AUTOCOMPLETE DROPDOWN
+   ============================================================ */
+.autocomplete-wrapper {
+    position: relative;
+}
+
+.autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 200;
+    max-height: 150px;
+    overflow-y: auto;
+    display: none;
+}
+
+.autocomplete-list.show {
+    display: block;
+}
+
+.autocomplete-list .ac-item {
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.autocomplete-list .ac-item:hover {
+    background: #eff6ff;
+}
+
+/* ============================================================
+   CUSTOMER SELECTOR (dropdown above buyer section)
+   ============================================================ */
+.customer-selector {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-bottom: 1px solid #1A1A1A;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-selector select {
+    flex: 1;
+    padding: 3px 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: 'Roboto', sans-serif;
+}
+
+.customer-selector .btn-sm {
+    font-size: 11px;
+    padding: 3px 8px;
+}
+
+/* Ship-to / Bill-to toggle */
+.ship-bill-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    padding: 2px 10px 4px;
+}
+
+.ship-bill-toggle input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* ============================================================
+   PHONE INPUT WITH COUNTRY CODE
+   ============================================================ */
+.phone-input-group {
+    display: flex;
+    gap: 4px;
+}
+
+.phone-input-group .country-code {
+    width: 55px;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-family: 'Roboto', sans-serif;
+    outline: none;
+}
+
+.phone-input-group .phone-number {
+    flex: 1;
+}
+
+/* ============================================================
+   SAVED INVOICES LIST
+   ============================================================ */
+.invoice-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    transition: background 0.15s;
+}
+
+.invoice-list-item:hover {
+    background: #f9fafb;
+}
+
+.invoice-list-item .inv-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.invoice-list-item .inv-no {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.invoice-list-item .inv-detail {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.invoice-list-item .inv-amount {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1A1A1A;
+    min-width: 120px;
+    text-align: right;
+}
+
+.inv-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ============================================================
+   NOTIFICATION TOAST
+   ============================================================ */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    background: #059669;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 9999;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.toast.error {
+    background: #dc2626;
+}
+
+.toast.show {
+    display: block;
+    animation: fadeInOut 3s forwards;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* ============================================================
+   PRINT STYLES — Standardized for Perfect Layout
+   ============================================================ */
+@media print {
+    /* Hide all UI elements */
+    .sidebar,
+    .action-bar,
+    .panel,
+    .toast,
+    .customer-selector,
+    .ship-bill-toggle,
+    .tax-selector {
+        display: none !important;
+    }
+
+    /* Force high-contrast rendering for lines */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    body {
+        background: white !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .main-workspace {
+        margin-left: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    /* SCALE FIX: Width set to 100% and Height to auto to fix 2nd page spillover */
+    .a4-container {
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: auto !important; /* FIXED: Changed from 297mm to auto */
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 2px solid #1A1A1A !important;
+        box-sizing: border-box !important;
+        page-break-inside: avoid; /* FIXED: Prevent splitting onto page 2 */
+    }
+
+    /* Ensure all internal tables and fields stay black */
+    .product-table th, .product-table td, 
+    .tax-summary-table th, .tax-summary-table td,
+    .invoice-left .section, .invoice-right .field-row, .invoice-right .field,
+    .amount-chargeable, .declaration, .computer-generated {
+        border-color: #1A1A1A !important;
+    }
+
+    /* Hide all edit controls inside invoice */
+    .qty-btn,
+    .autocomplete-list,
+    .row-action-controls {
+        display: none !important;
+    }
+
+    /* Make inputs look like plain text */
+    .invoice-input,
+    .invoice-select,
+    .qty-controls input {
+        border: none !important;
+        background: transparent !important;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+
+    /* Print page setup */
+    @page {
+        size: A4;
+        margin: 10mm; 
+    }
+}

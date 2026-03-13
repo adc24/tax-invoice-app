@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice {{ invoice.invoice_no }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* Print-only overrides for PDF generation */
+        body { background: white; }
+        .sidebar, .action-bar, .customer-selector, .tax-selector, .ship-bill-toggle, .panel { display: none !important; }
+        .main-workspace { margin-left: 0; padding: 0; }
+        .a4-container { box-shadow: none; width: 210mm; margin: 0; }
+        .qty-btn, .autocomplete-list { display: none !important; }
+        .invoice-input, .invoice-select, input { border: none !important; background: transparent !important; }
+        @page { size: A4; margin: 10mm; }
+    </style>
+</head>
+<body>
+<main class="main-workspace">
+<div class="a4-container">
+    <div class="invoice-title">TAX INVOICE</div>
+    <div class="invoice-top">
+        <div class="invoice-left">
+            <div class="section">
+                <div class="company-name">{{ owner.company_name or '' }}</div>
+                <div class="info-line">{{ owner.address or '' }}</div>
+                <div class="info-line">{{ owner.city or '' }}</div>
+                <div class="info-line">GSTIN/UIN: {{ owner.gstin or '' }}</div>
+                <div class="info-line">State Name: {{ owner.state_name or '' }}, Code: {{ owner.state_code or '' }}</div>
+            </div>
+            <div class="section">
+                <div class="section-label">Consignee (Ship to)</div>
+                <div class="company-name">{{ invoice.ship_to_name or '' }}</div>
+                <div class="info-line">{{ invoice.ship_to_address or '' }}</div>
+                <div class="info-line">GSTIN/UIN: {{ invoice.ship_to_gstin or '' }}</div>
+                <div class="info-line">State Name: {{ invoice.ship_to_state or '' }}, Code: {{ invoice.ship_to_state_code or '' }}</div>
+            </div>
+            <div class="section">
+                <div class="section-label">Buyer (Bill to)</div>
+                <div class="company-name">{{ invoice.buyer_name or '' }}</div>
+                <div class="info-line">{{ invoice.buyer_address or '' }}</div>
+                <div class="info-line">GSTIN/UIN: {{ invoice.buyer_gstin or '' }}</div>
+                <div class="info-line">State Name: {{ invoice.buyer_state or '' }}, Code: {{ invoice.buyer_state_code or '' }}</div>
+            </div>
+        </div>
+        <div class="invoice-right">
+            <div class="field-row"><div class="field"><span class="field-label">Invoice No.</span><span class="field-value">{{ invoice.invoice_no }}</span></div>
+                <div class="field"><span class="field-label">Dated</span><span class="field-value">{{ invoice.invoice_date }}</span></div></div>
+            <div class="field-row"><div class="field"><span class="field-label">Delivery Note</span><span class="field-value">{{ invoice.delivery_note or '' }}</span></div>
+                <div class="field"><span class="field-label">Mode/Terms of Payment</span><span class="field-value">{{ invoice.payment_mode or '' }}</span></div></div>
+            <div class="field-row"><div class="field"><span class="field-label">Reference No. & Date</span><span class="field-value">{{ invoice.reference_no or '' }}</span></div>
+                <div class="field"><span class="field-label">Other References</span><span class="field-value">{{ invoice.other_references or '' }}</span></div></div>
+            <div class="field-row"><div class="field"><span class="field-label">Buyer's Order No.</span><span class="field-value">{{ invoice.buyer_order_no or '' }}</span></div>
+                <div class="field"><span class="field-label">Dated</span><span class="field-value">{{ invoice.buyer_order_date or '' }}</span></div></div>
+            <div class="field-row"><div class="field"><span class="field-label">Dispatch Doc No.</span><span class="field-value">{{ invoice.dispatch_doc_no or '' }}</span></div>
+                <div class="field"><span class="field-label">Delivery Note Date</span><span class="field-value">{{ invoice.delivery_note_date or '' }}</span></div></div>
+            <div class="field-row"><div class="field"><span class="field-label">Dispatched through</span><span class="field-value">{{ invoice.dispatched_through or '' }}</span></div>
+                <div class="field"><span class="field-label">Destination</span><span class="field-value">{{ invoice.destination or '' }}</span></div></div>
+            <div class="field-row full"><div class="field"><span class="field-label">Terms of Delivery</span><span class="field-value">{{ invoice.terms_of_delivery or '' }}</span></div></div>
+        </div>
+    </div>
+
+    <table class="product-table">
+        <thead><tr>
+            <th class="col-sl">Sl No.</th><th class="col-desc">Description of Goods</th>
+            <th class="col-hsn">HSN/SAC</th><th class="col-qty">Quantity</th>
+            <th class="col-rate">Rate</th><th class="col-per">per</th>
+            <th class="col-disc">Disc. %</th><th class="col-amount">Amount</th>
+        </tr></thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.sl_no }}</td>
+                <td class="text-left">{{ item.description }}</td>
+                <td>{{ item.hsn or '' }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ "%.2f"|format(item.rate) }}</td>
+                <td>{{ item.per_unit }}</td>
+                <td>{{ item.discount_percent or '' }}</td>
+                <td class="text-right">{{ "%.2f"|format(item.amount) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot><tr class="total-row">
+            <td colspan="3" style="text-align:right; font-weight:700;">Total</td>
+            <td>{{ items|sum(attribute='quantity') }}</td>
+            <td></td><td></td><td></td>
+            <td class="text-right">₹ {{ "%.2f"|format(invoice.grand_total) }}</td>
+        </tr></tfoot>
+    </table>
+
+    <div class="amount-chargeable">
+        <div><div class="label">Amount Chargeable (in words)</div>
+            <div class="words">{{ grand_total_words }}</div></div>
+        <div class="eoe">E. & O.E</div>
+    </div>
+
+    <div class="tax-words">{{ tax_amount_words }}</div>
+
+    <div class="invoice-footer-bottom">
+        <div class="declaration"><strong>Declaration</strong>
+            {{ owner.declaration_text or 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.' }}</div>
+        <div class="signatory"><div class="for-company">for {{ owner.company_name or '' }}</div>
+            <div class="auth-label">Authorised Signatory</div></div>
+    </div>
+    <div class="computer-generated">This is a Computer Generated Invoice</div>
+</div>
+</main>
+</body>
+</html>
