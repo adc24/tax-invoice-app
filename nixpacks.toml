@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "pango", "harfbuzz", "fontconfig", "libGL"]
+nixPkgs = ["python311", "pango", "harfbuzz", "fontconfig", "libGL", "glib", "gobject-introspection"]
 
 [phases.build]
 cmds = ["pip install -r requirements.txt"]
