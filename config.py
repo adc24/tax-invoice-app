@@ -6,19 +6,34 @@ Includes Database connection parameters and app secrets.
 """
 
 import os
+from urllib.parse import urlparse
 
 # ============================================================
 # DATABASE CONFIGURATION
 # ============================================================
-# These values are used for LOCAL development.
-# In Production (Render/Railway), set these as Environment Variables.
-DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Abhay@123',  # Change this to your local password
-    'database': 'tax_invoice_db',             # Change this to your local DB name
-    'port': 3306
-}
+
+# Check if Railway has provided a MYSQL_URL
+railway_db_url = os.environ.get('MYSQL_URL')
+
+if railway_db_url:
+    # Parse the Railway URL into components
+    url = urlparse(railway_db_url)
+    DB_CONFIG = {
+        'host': url.hostname,
+        'user': url.username,
+        'password': url.password,
+        'database': url.path[1:],  # Removes the leading slash
+        'port': url.port or 3306
+    }
+else:
+    # Fallback to LOCAL development settings
+    DB_CONFIG = {
+        'host': 'localhost',
+        'user': 'root',
+        'password': 'Abhay@123',
+        'database': 'tax_invoice_db',
+        'port': 3306
+    }
 
 # ============================================================
 # APPLICATION SETTINGS

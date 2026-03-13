@@ -38,14 +38,15 @@ app.secret_key = SECRET_KEY
 # ============================================================
 def get_db():
     """Create and return a MySQL database connection using env vars or config."""
-    # Priority 1: Check for individual environment variables (Render/Railway)
-    # Priority 2: Fallback to the local DB_CONFIG from config.py
+    # Priority 1: Check for Railway's native environment variables
+    # Priority 2: Check for custom environment variables (Render/Other)
+    # Priority 3: Fallback to the local DB_CONFIG from config.py
     
-    host = os.environ.get('DB_HOST', DB_CONFIG.get('host', 'localhost'))
-    user = os.environ.get('DB_USER', DB_CONFIG.get('user', 'root'))
-    password = os.environ.get('DB_PASSWORD', DB_CONFIG.get('password', ''))
-    database = os.environ.get('DB_NAME', DB_CONFIG.get('database', ''))
-    port = int(os.environ.get('DB_PORT', DB_CONFIG.get('port', 3306)))
+    host = os.environ.get('MYSQLHOST', os.environ.get('DB_HOST', DB_CONFIG.get('host', 'localhost')))
+    user = os.environ.get('MYSQLUSER', os.environ.get('DB_USER', DB_CONFIG.get('user', 'root')))
+    password = os.environ.get('MYSQLPASSWORD', os.environ.get('DB_PASSWORD', DB_CONFIG.get('password', '')))
+    database = os.environ.get('MYSQLDATABASE', os.environ.get('DB_NAME', DB_CONFIG.get('database', '')))
+    port = int(os.environ.get('MYSQLPORT', os.environ.get('DB_PORT', DB_CONFIG.get('port', 3306))))
 
     return mysql.connector.connect(
         host=host,
