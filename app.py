@@ -6,6 +6,7 @@ Handles all routes: serving pages, CRUD for customers/products/invoices,
 PDF generation, and invoice number auto-increment.
 """
 
+import os  # Added for environment variables
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
 import mysql.connector
@@ -36,19 +37,31 @@ app.secret_key = SECRET_KEY
 # DATABASE HELPER
 # ============================================================
 def get_db():
-    """Create and return a MySQL database connection."""
-    return mysql.connector.connect(**DB_CONFIG)
+    """Create and return a MySQL database connection using env vars or config."""
+    # Priority 1: Check for individual environment variables (Render/Railway)
+    # Priority 2: Fallback to the local DB_CONFIG from config.py
+    
+    host = os.environ.get('DB_HOST', DB_CONFIG.get('host', 'localhost'))
+    user = os.environ.get('DB_USER', DB_CONFIG.get('user', 'root'))
+    password = os.environ.get('DB_PASSWORD', DB_CONFIG.get('password', ''))
+    database = os.environ.get('DB_NAME', DB_CONFIG.get('database', ''))
+    port = int(os.environ.get('DB_PORT', DB_CONFIG.get('port', 3306)))
+
+    return mysql.connector.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=database,
+        port=port
+    )
 
 
 # ============================================================
 # NUMBER TO WORDS CONVERSION
 # ============================================================
 def number_to_words(amount):
-    """Convert a numeric amount to Indian English words.
-    Example: 560.00 -> 'Indian Rupee Five Hundred Sixty Only'
-    """
+    """Convert a numeric amount to Indian English words."""
     if NUM2WORDS_AVAILABLE:
-        # Split into rupees and paise
         rupees = int(amount)
         paise = round((amount - rupees) * 100)
         words = num2words(rupees, lang='en_IN').title()
@@ -109,7 +122,6 @@ INDIAN_STATES = [
 
 @app.route('/')
 def index():
-    """Serve the main invoice application page."""
     return render_template('invoice.html', states=INDIAN_STATES)
 
 
@@ -119,7 +131,6 @@ def index():
 
 @app.route('/api/owner', methods=['GET'])
 def get_owner():
-    """Retrieve the owner/seller information."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM owner_info LIMIT 1")
@@ -131,11 +142,9 @@ def get_owner():
 
 @app.route('/api/owner', methods=['POST'])
 def update_owner():
-    """Update the owner/seller information."""
     data = request.json
     db = get_db()
     cursor = db.cursor()
-    # Check if owner exists
     cursor.execute("SELECT id FROM owner_info LIMIT 1")
     existing = cursor.fetchone()
 
@@ -183,7 +192,6 @@ def update_owner():
 
 @app.route('/api/customers', methods=['GET'])
 def get_customers():
-    """Retrieve all customers for the dropdown/list."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM customers ORDER BY customer_name")
@@ -194,7 +202,6 @@ def get_customers():
 
 @app.route('/api/customers/<int:cid>', methods=['GET'])
 def get_single_customer(cid):
-    """Retrieve a single customer by ID."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM customers WHERE id=%s", (cid,))
@@ -205,7 +212,6 @@ def get_single_customer(cid):
 
 @app.route('/api/customers', methods=['POST'])
 def add_customer():
-    """Add a new customer to the database."""
     data = request.json
     db = get_db()
     cursor = db.cursor()
@@ -227,7 +233,6 @@ def add_customer():
 
 @app.route('/api/customers/<int:cid>', methods=['PUT'])
 def update_customer(cid):
-    """Update an existing customer."""
     data = request.json
     db = get_db()
     cursor = db.cursor()
@@ -249,7 +254,6 @@ def update_customer(cid):
 
 @app.route('/api/customers/<int:cid>', methods=['DELETE'])
 def delete_customer(cid):
-    """Delete a customer by ID."""
     db = get_db()
     cursor = db.cursor()
     cursor.execute("DELETE FROM customers WHERE id=%s", (cid,))
@@ -265,14 +269,12 @@ def delete_customer(cid):
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    """Retrieve all products for autocomplete/catalog."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products ORDER BY product_name")
     products = cursor.fetchall()
     cursor.close()
     db.close()
-    # Convert Decimal to float for JSON serialization
     for p in products:
         p['default_price'] = float(p['default_price']) if p['default_price'] else 0
         p['default_tax'] = float(p['default_tax']) if p['default_tax'] else 0
@@ -280,7 +282,6 @@ def get_products():
 
 @app.route('/api/products/<int:pid>', methods=['GET'])
 def get_single_product(pid):
-    """Retrieve a single product by ID."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products WHERE id=%s", (pid,))
@@ -294,7 +295,6 @@ def get_single_product(pid):
 
 @app.route('/api/products', methods=['POST'])
 def add_product():
-    """Add a new product to the catalog."""
     data = request.json
     db = get_db()
     cursor = db.cursor()
@@ -314,7 +314,6 @@ def add_product():
 
 @app.route('/api/products/<int:pid>', methods=['PUT'])
 def update_product(pid):
-    """Update an existing product."""
     data = request.json
     db = get_db()
     cursor = db.cursor()
@@ -334,7 +333,6 @@ def update_product(pid):
 
 @app.route('/api/products/<int:pid>', methods=['DELETE'])
 def delete_product(pid):
-    """Delete a product by ID."""
     db = get_db()
     cursor = db.cursor()
     cursor.execute("DELETE FROM products WHERE id=%s", (pid,))
@@ -345,7 +343,6 @@ def delete_product(pid):
 
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
-    """Search products by name for autocomplete."""
     query = request.args.get('q', '')
     db = get_db()
     cursor = db.cursor(dictionary=True)
@@ -368,7 +365,6 @@ def search_products():
 
 @app.route('/api/invoices/next-number', methods=['GET'])
 def next_invoice_number():
-    """Generate the next auto-incremented invoice number."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM invoice_counter LIMIT 1")
@@ -387,29 +383,24 @@ def next_invoice_number():
 
 @app.route('/api/invoices', methods=['POST'])
 def save_invoice():
-    """Save or update an invoice (header + line items)."""
     data = request.json or {}
     db = get_db()
     cursor = db.cursor()
 
     def normalize_invoice_datetime(raw_value):
-        """Convert datetime-local values to MySQL DATETIME format."""
         if not raw_value:
             return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
         for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
             try:
                 return datetime.strptime(raw_value, fmt).strftime('%Y-%m-%d %H:%M:%S')
             except ValueError:
                 continue
-
         return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     try:
         invoice_id = data.get('invoice_id')
         invoice_date = normalize_invoice_datetime(data.get('invoice_date'))
 
-        # Common field tuple used by both INSERT and UPDATE
         invoice_values = (
             data.get('invoice_no'), invoice_date,
             data.get('buyer_name'), data.get('buyer_address'),
@@ -431,7 +422,6 @@ def save_invoice():
         )
 
         if invoice_id:
-            # EDIT MODE: update header and replace line items
             cursor.execute("SELECT id FROM invoices WHERE id=%s", (invoice_id,))
             existing = cursor.fetchone()
             if not existing:
@@ -457,7 +447,6 @@ def save_invoice():
             saved_invoice_id = invoice_id
             mode = 'updated'
         else:
-            # CREATE MODE: increment counter and insert a new invoice
             cursor.execute("SELECT id, prefix, last_number FROM invoice_counter ORDER BY id ASC LIMIT 1")
             counter = cursor.fetchone()
             if counter:
@@ -500,7 +489,6 @@ def save_invoice():
             saved_invoice_id = cursor.lastrowid
             mode = 'created'
 
-        # Insert each line item (for both create and update)
         items = data.get('items', [])
         for item in items:
             cursor.execute("""
@@ -531,7 +519,6 @@ def save_invoice():
 
 @app.route('/api/invoices', methods=['GET'])
 def get_invoices():
-    """Retrieve all saved invoices (summary list)."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("""
@@ -541,7 +528,6 @@ def get_invoices():
     invoices = cursor.fetchall()
     cursor.close()
     db.close()
-    # Convert types for JSON
     for inv in invoices:
         inv['grand_total'] = float(inv['grand_total']) if inv['grand_total'] else 0
         if inv['invoice_date']:
@@ -551,7 +537,6 @@ def get_invoices():
 
 @app.route('/api/invoices/<int:inv_id>', methods=['GET'])
 def get_invoice(inv_id):
-    """Retrieve a single invoice with all its line items."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
@@ -561,14 +546,12 @@ def get_invoice(inv_id):
         db.close()
         return jsonify({"error": "Invoice not found"}), 404
 
-    # Convert Decimal fields
     for key in ['subtotal', 'tax_amount', 'grand_total', 'custom_tax_rate']:
         if invoice.get(key):
             invoice[key] = float(invoice[key])
     if invoice.get('invoice_date'):
         invoice['invoice_date'] = invoice['invoice_date'].strftime('%Y-%m-%dT%H:%M')
 
-    # Get line items
     cursor.execute("SELECT * FROM invoice_items WHERE invoice_id=%s ORDER BY sl_no", (inv_id,))
     items = cursor.fetchall()
     for item in items:
@@ -584,7 +567,6 @@ def get_invoice(inv_id):
 
 @app.route('/api/invoices/<int:inv_id>', methods=['DELETE'])
 def delete_invoice(inv_id):
-    """Delete an invoice and its items."""
     db = get_db()
     cursor = db.cursor()
     cursor.execute("DELETE FROM invoices WHERE id=%s", (inv_id,))
@@ -600,11 +582,9 @@ def delete_invoice(inv_id):
 
 @app.route('/api/invoices/<int:inv_id>/pdf', methods=['GET'])
 def generate_pdf(inv_id):
-    """Generate a PDF for a specific invoice using WeasyPrint."""
     if not WEASY_AVAILABLE:
         return jsonify({"error": "WeasyPrint not installed"}), 500
 
-    # Fetch invoice data
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
@@ -625,17 +605,14 @@ def generate_pdf(inv_id):
             if item.get(key):
                 item[key] = float(item[key])
 
-    # Fetch owner info
     cursor.execute("SELECT * FROM owner_info LIMIT 1")
     owner = cursor.fetchone()
     cursor.close()
     db.close()
 
-    # Convert totals to words
     grand_total_words = number_to_words(float(invoice.get('grand_total', 0)))
     tax_amount_words = number_to_words(float(invoice.get('tax_amount', 0)))
 
-    # Render the print-mode HTML
     html_content = render_template(
         'invoice_print.html',
         invoice=invoice,
@@ -646,8 +623,6 @@ def generate_pdf(inv_id):
         states=INDIAN_STATES
     )
 
-    # Generate PDF from HTML
-    # FIXED: Added base_url=request.url_root and variant to fix PDF engine errors
     pdf = WeasyHTML(string=html_content, base_url=request.url_root).write_pdf(variant='pdf/a-1b')
 
     return Response(
@@ -661,7 +636,6 @@ def generate_pdf(inv_id):
 
 @app.route('/api/number-to-words', methods=['GET'])
 def api_number_to_words():
-    """API endpoint to convert a number to words."""
     amount = float(request.args.get('amount', 0))
     return jsonify({"words": number_to_words(amount)})
 
@@ -670,12 +644,7 @@ def api_number_to_words():
 # RUN THE APPLICATION
 # ============================================================
 if __name__ == '__main__':
-    print("Starting Tax Invoice Application...")
-    print("Open http://127.0.0.1:5000 in your browser")
-    app.run(debug=True, port=5000)
-
-
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # Automatically get port from environment for Render/Railway
+    port = int(os.environ.get("PORT", 5000))
+    # If on Render, debug should ideally be False, but keeping True for your testing
+    app.run(host="0.0.0.0", port=port, debug=True)
