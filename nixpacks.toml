@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["python311", "pango", "harfbuzz", "fontconfig", "libGL", "glib", "gobject-introspection"]
+nixPkgs = ["python311", "pango", "harfbuzz", "fontconfig", "libGL", "glib"]
 
 [phases.build]
 cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "gunicorn app:app"
+cmd = "gunicorn --bind 0.0.0.0:$PORT app:app"

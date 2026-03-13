@@ -6,28 +6,29 @@ Handles all routes: serving pages, CRUD for customers/products/invoices,
 PDF generation, and invoice number auto-increment.
 """
 
-import os  # Added for environment variables
+import os
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
 import mysql.connector
 import json
 from config import DB_CONFIG, SECRET_KEY, INVOICE_PREFIX
 
-# Try importing WeasyPrint for PDF generation
+# --- SAFE IMPORT WRAPPER ---
 try:
     from weasyprint import HTML as WeasyHTML
     WEASY_AVAILABLE = True
-except ImportError:
+    print("SUCCESS: WeasyPrint loaded successfully.")
+except Exception as e:
     WEASY_AVAILABLE = False
-    print("WARNING: WeasyPrint not installed. PDF download will not work.")
+    # This will show up in your Railway logs but WON'T crash the app
+    print(f"CRITICAL: WeasyPrint failed to load. PDF features will be disabled. Error: {e}")
 
-# Try importing num2words for number-to-words conversion
 try:
     from num2words import num2words
     NUM2WORDS_AVAILABLE = True
 except ImportError:
     NUM2WORDS_AVAILABLE = False
-    print("WARNING: num2words not installed. Using basic conversion.")
+# ---------------------------
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
