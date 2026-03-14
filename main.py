@@ -27,13 +27,36 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # ============================================================
+# INDIAN STATES LIST (Required for the frontend dropdown)
+# ============================================================
+INDIAN_STATES = [
+    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Arunachal Pradesh", "code": "12"},
+    {"name": "Assam", "code": "18"}, {"name": "Bihar", "code": "10"},
+    {"name": "Chhattisgarh", "code": "22"}, {"name": "Delhi", "code": "07"},
+    {"name": "Goa", "code": "30"}, {"name": "Gujarat", "code": "24"},
+    {"name": "Haryana", "code": "06"}, {"name": "Himachal Pradesh", "code": "02"},
+    {"name": "Jharkhand", "code": "20"}, {"name": "Karnataka", "code": "29"},
+    {"name": "Kerala", "code": "32"}, {"name": "Madhya Pradesh", "code": "23"},
+    {"name": "Maharashtra", "code": "27"}, {"name": "Manipur", "code": "14"},
+    {"name": "Meghalaya", "code": "17"}, {"name": "Mizoram", "code": "15"},
+    {"name": "Nagaland", "code": "13"}, {"name": "Odisha", "code": "21"},
+    {"name": "Punjab", "code": "03"}, {"name": "Rajasthan", "code": "08"},
+    {"name": "Sikkim", "code": "11"}, {"name": "Tamil Nadu", "code": "33"},
+    {"name": "Telangana", "code": "36"}, {"name": "Tripura", "code": "16"},
+    {"name": "Uttar Pradesh", "code": "09"}, {"name": "Uttarakhand", "code": "05"},
+    {"name": "West Bengal", "code": "19"}, {"name": "Jammu & Kashmir", "code": "01"},
+    {"name": "Ladakh", "code": "38"}, {"name": "Chandigarh", "code": "04"},
+    {"name": "Puducherry", "code": "34"}, {"name": "Lakshadweep", "code": "31"},
+    {"name": "Andaman & Nicobar Islands", "code": "35"},
+    {"name": "Dadra & Nagar Haveli and Daman & Diu", "code": "26"},
+]
+
+# ============================================================
 # DATABASE HELPER (Volume-Friendly Path)
 # ============================================================
-# Create a 'data' folder if it doesn't exist to house the SQLite file
 if not os.path.exists("data"):
     os.makedirs("data")
 
-# Path must point inside the 'data' folder for the volume to work correctly
 DB_PATH = os.path.join(os.getcwd(), "data", "invoice_data.db")
 
 def get_db():
@@ -55,7 +78,7 @@ def init_db():
 init_db()
 
 # ============================================================
-# FIXED: NUMBER TO WORDS
+# NUMBER TO WORDS
 # ============================================================
 def number_to_words(amount):
     try:
@@ -77,7 +100,8 @@ def number_to_words(amount):
 # ============================================================
 @app.route('/')
 def index():
-    return render_template('invoice.html')
+    # FIX: We now pass the states list to the template
+    return render_template('invoice.html', states=INDIAN_STATES)
 
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
@@ -118,7 +142,7 @@ def generate_pdf(inv_id):
     t_words = number_to_words(invoice['tax_amount'])
 
     html = render_template('invoice_print.html', invoice=invoice, owner=owner, 
-                           items=[], grand_total_words=g_words, tax_amount_words=t_words)
+                           items=[], grand_total_words=g_words, tax_amount_words=t_words, states=INDIAN_STATES)
     if WEASY_AVAILABLE:
         return Response(WeasyHTML(string=html).write_pdf(), mimetype='application/pdf')
     return html
