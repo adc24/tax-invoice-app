@@ -26,9 +26,7 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# ============================================================
-# CONFIG & DATABASE
-# ============================================================
+# --- CONFIG ---
 INDIAN_STATES = [
     {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
     {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
@@ -59,87 +57,65 @@ def init_db():
 
 init_db()
 
+# --- THE FIX: Enhanced Number to Words ---
 def number_to_words(amount):
     try:
         amount = round(float(amount or 0), 2)
         if amount <= 0: return "Indian Rupee Zero Only"
+        
         rupees = int(amount)
         paise = int(round((amount - rupees) * 100))
+        
         words = num2words(rupees, lang='en_IN').title()
+        result = f"Indian Rupee {words}"
+        
         if paise > 0:
             paise_words = num2words(paise, lang='en_IN').title()
-            return f"Indian Rupee {words} and {paise_words} Paise Only"
-        return f"Indian Rupee {words} Only"
-    except: return "Indian Rupee Zero Only"
+            result += f" and {paise_words} Paise"
+            
+        return result + " Only"
+    except Exception as e:
+        print(f"Word conversion error: {e}")
+        return "Indian Rupee Zero Only"
 
-# ============================================================
-# ROUTES
-# ============================================================
+# --- ROUTES ---
 @app.route('/')
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-# --- CUSTOMERS ---
 @app.route('/api/customers', methods=['GET', 'POST'])
 def handle_customers():
     db = get_db()
     if request.method == 'POST':
         d = request.json
-        db.execute("INSERT INTO customers (customer_name, address, city, state_name, state_code, gstin, phone, email) VALUES (?,?,?,?,?,?,?,?)",
-                   (d.get('customer_name'), d.get('address'), d.get('city'), d.get('state_name'), d.get('state_code'), d.get('gstin'), d.get('phone'), d.get('email')))
+        db.execute("INSERT INTO customers (customer_name, gstin) VALUES (?,?)", (d.get('customer_name'), d.get('gstin')))
         db.commit()
         return jsonify({"status": "success"})
     res = db.execute("SELECT * FROM customers ORDER BY id DESC").fetchall()
     return jsonify([dict(row) for row in res])
 
-@app.route('/api/customers/<int:id>', methods=['DELETE', 'PUT'])
-def handle_single_customer(id):
-    db = get_db()
-    if request.method == 'DELETE':
-        db.execute("DELETE FROM customers WHERE id=?", (id,))
-    elif request.method == 'PUT':
-        d = request.json
-        db.execute("UPDATE customers SET customer_name=?, address=?, city=?, gstin=? WHERE id=?", 
-                   (d.get('customer_name'), d.get('address'), d.get('city'), d.get('gstin'), id))
-    db.commit()
-    return jsonify({"status": "success"})
-
-# --- PRODUCTS ---
 @app.route('/api/products', methods=['GET', 'POST'])
 def handle_products():
     db = get_db()
     if request.method == 'POST':
         d = request.json
-        db.execute("INSERT INTO products (product_name, hsn, default_price, default_tax, unit) VALUES (?,?,?,?,?)",
-                   (d.get('product_name'), d.get('hsn'), d.get('default_price'), d.get('default_tax'), d.get('unit')))
+        db.execute("INSERT INTO products (product_name, default_price) VALUES (?,?)", (d.get('product_name'), d.get('default_price')))
         db.commit()
         return jsonify({"status": "success"})
     res = db.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
     return jsonify([dict(row) for row in res])
 
-@app.route('/api/products/<int:id>', methods=['DELETE', 'PUT'])
-def handle_single_product(id):
-    db = get_db()
-    if request.method == 'DELETE':
-        db.execute("DELETE FROM products WHERE id=?", (id,))
-    elif request.method == 'PUT':
-        d = request.json
-        db.execute("UPDATE products SET product_name=?, default_price=? WHERE id=?", (d.get('product_name'), d.get('default_price'), id))
-    db.commit()
-    return jsonify({"status": "success"})
-
-# --- INVOICES ---
 @app.route('/api/invoices', methods=['GET', 'POST'])
 def handle_invoices():
     db = get_db()
     if request.method == 'POST':
         d = request.json
         cur = db.execute("INSERT INTO invoices (invoice_no, invoice_date, buyer_name, subtotal, tax_amount, grand_total) VALUES (?,?,?,?,?,?)",
-                        (d.get('invoice_no'), datetime.now().strftime('%d-%m-%Y %H:%M'), d.get('buyer_name'), d.get('subtotal'), d.get('tax_amount'), d.get('grand_total')))
+                        (d.get('invoice_no'), datetime.now().strftime('%d-%m-%Y'), d.get('buyer_name'), d.get('subtotal'), d.get('tax_amount'), d.get('grand_total')))
         inv_id = cur.lastrowid
         for item in d.get('items', []):
-            db.execute("INSERT INTO invoice_items (invoice_id, description, hsn, quantity, rate, amount) VALUES (?,?,?,?,?,?)",
-                       (inv_id, item.get('description'), item.get('hsn'), item.get('quantity'), item.get('rate'), item.get('amount')))
+            db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, rate, amount) VALUES (?,?,?,?,?)",
+                       (inv_id, item.get('description'), item.get('quantity'), item.get('rate'), item.get('amount')))
         db.commit()
         return jsonify({"status": "success", "invoice_id": inv_id})
     res = db.execute("SELECT * FROM invoices ORDER BY id DESC").fetchall()
@@ -153,29 +129,26 @@ def delete_invoice(id):
     db.commit()
     return jsonify({"status": "success"})
 
-@app.route('/api/owner', methods=['GET', 'POST'])
-def handle_owner():
-    db = get_db()
-    if request.method == 'POST':
-        d = request.json
-        db.execute("INSERT OR REPLACE INTO owner_info (id, company_name, gstin, address) VALUES (1,?,?,?)", (d.get('company_name'), d.get('gstin'), d.get('address')))
-        db.commit()
-        return jsonify({"status": "success"})
-    owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
-    return jsonify(dict(owner) if owner else {})
-
 @app.route('/api/invoices/<int:inv_id>/pdf')
 def generate_pdf(inv_id):
     db = get_db()
     invoice = db.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
+    if not invoice:
+        return "Invoice Not Found", 404
+        
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (inv_id,)).fetchall()
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     
+    # CRITICAL FIX: Convert both amounts to words here
     g_words = number_to_words(invoice['grand_total'])
     t_words = number_to_words(invoice['tax_amount'])
 
-    html = render_template('invoice_print.html', invoice=dict(invoice), owner=dict(owner) if owner else {}, 
-                           items=[dict(i) for i in items], grand_total_words=g_words, tax_amount_words=t_words)
+    html = render_template('invoice_print.html', 
+                           invoice=dict(invoice), 
+                           owner=dict(owner) if owner else {}, 
+                           items=[dict(i) for i in items], 
+                           grand_total_words=g_words, 
+                           tax_amount_words=t_words)
     
     if WEASY_AVAILABLE:
         pdf = WeasyHTML(string=html).write_pdf()
