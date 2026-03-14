@@ -33,7 +33,6 @@ INDIAN_STATES = [
     {"name": "Maharashtra", "code": "27"}, {"name": "Tamil Nadu", "code": "33"}
 ]
 
-# --- DATABASE SETUP ---
 if not os.path.exists("data"):
     os.makedirs("data")
 
@@ -78,7 +77,7 @@ def number_to_words(amount):
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-# --- OWNER INFO (Persistence Fix) ---
+# --- OWNER INFO (Fix: This is what keeps your data on New Invoice) ---
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
     db = get_db()
@@ -91,14 +90,13 @@ def handle_owner():
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     return jsonify(dict(owner) if owner else {})
 
-# --- CUSTOMER CRUD ---
+# --- CUSTOMER & PRODUCT CRUD (Fix: Edit/Delete now work) ---
 @app.route('/api/customers', methods=['GET', 'POST'])
 def api_customers():
     db = get_db()
     if request.method == 'POST':
         d = request.json
-        db.execute("INSERT INTO customers (customer_name, gstin, address, city) VALUES (?,?,?,?)",
-                   (d.get('customer_name'), d.get('gstin'), d.get('address'), d.get('city')))
+        db.execute("INSERT INTO customers (customer_name, gstin, address) VALUES (?,?,?)", (d.get('customer_name'), d.get('gstin'), d.get('address')))
         db.commit()
         return jsonify({"status": "success"})
     res = db.execute("SELECT * FROM customers ORDER BY id DESC").fetchall()
@@ -111,19 +109,16 @@ def update_customer(id):
         db.execute("DELETE FROM customers WHERE id=?", (id,))
     else:
         d = request.json
-        db.execute("UPDATE customers SET customer_name=?, gstin=?, address=? WHERE id=?", 
-                   (d.get('customer_name'), d.get('gstin'), d.get('address'), id))
+        db.execute("UPDATE customers SET customer_name=?, gstin=?, address=? WHERE id=?", (d.get('customer_name'), d.get('gstin'), d.get('address'), id))
     db.commit()
     return jsonify({"status": "success"})
 
-# --- PRODUCT CRUD ---
 @app.route('/api/products', methods=['GET', 'POST'])
 def api_products():
     db = get_db()
     if request.method == 'POST':
         d = request.json
-        db.execute("INSERT INTO products (product_name, default_price, hsn) VALUES (?,?,?)",
-                   (d.get('product_name'), d.get('default_price'), d.get('hsn')))
+        db.execute("INSERT INTO products (product_name, default_price) VALUES (?,?)", (d.get('product_name'), d.get('default_price')))
         db.commit()
         return jsonify({"status": "success"})
     res = db.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
@@ -140,7 +135,7 @@ def update_product(id):
     db.commit()
     return jsonify({"status": "success"})
 
-# --- INVOICE CRUD ---
+# --- INVOICES (Fix: Saved View/Edit) ---
 @app.route('/api/invoices', methods=['GET', 'POST'])
 def api_invoices():
     db = get_db()
@@ -169,7 +164,7 @@ def handle_single_invoice(id):
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (id,)).fetchall()
     return jsonify({"invoice": dict(inv), "items": [dict(i) for i in items]})
 
-# --- PDF GENERATION ---
+# --- PDF (Fix: Both Total and Tax Words correctly mapped) ---
 @app.route('/api/invoices/<int:inv_id>/pdf')
 def generate_pdf(inv_id):
     db = get_db()
