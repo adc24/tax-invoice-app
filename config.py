@@ -2,38 +2,18 @@
 config.py
 ---------
 Configuration settings for the Tax Invoice application.
-Includes Database connection parameters and app secrets.
+Switched to SQLite for simpler cloud deployment.
 """
 
 import os
-from urllib.parse import urlparse
 
 # ============================================================
-# DATABASE CONFIGURATION
+# DATABASE CONFIGURATION (SQLite)
 # ============================================================
 
-# Check if Railway has provided a MYSQL_URL
-railway_db_url = os.environ.get('MYSQL_URL')
-
-if railway_db_url:
-    # Parse the Railway URL into components
-    url = urlparse(railway_db_url)
-    DB_CONFIG = {
-        'host': url.hostname,
-        'user': url.username,
-        'password': url.password,
-        'database': url.path[1:],  # Removes the leading slash
-        'port': url.port or 3306
-    }
-else:
-    # Fallback to LOCAL development settings
-    DB_CONFIG = {
-        'host': 'localhost',
-        'user': 'root',
-        'password': 'Abhay@123',
-        'database': 'tax_invoice_db',
-        'port': 3306
-    }
+# We define the path for our database file.
+# In Railway, we will store this in a persistent volume.
+DB_PATH = os.path.join(os.getcwd(), 'invoice_data.db')
 
 # ============================================================
 # APPLICATION SETTINGS

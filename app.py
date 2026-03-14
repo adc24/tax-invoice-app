@@ -5,13 +5,18 @@ Flask backend for the Tax Invoice Web Application.
 Handles all routes: serving pages, CRUD for customers/products/invoices,
 PDF generation, and invoice number auto-increment.
 """
+"""
+app.py
+------
+Flask backend for the Tax Invoice Web Application.
+SQLite Version with Fixed Tax-to-Words logic.
+"""
 
 import os
+import sqlite3
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
-import mysql.connector
 import json
-from config import DB_CONFIG, SECRET_KEY, INVOICE_PREFIX
 
 # --- SAFE IMPORT WRAPPER ---
 try:
@@ -20,8 +25,7 @@ try:
     print("SUCCESS: WeasyPrint loaded successfully.")
 except Exception as e:
     WEASY_AVAILABLE = False
-    # This will show up in your Railway logs but WON'T crash the app
-    print(f"CRITICAL: WeasyPrint failed to load. PDF features will be disabled. Error: {e}")
+    print(f"CRITICAL: WeasyPrint failed to load. PDF features disabled. Error: {e}")
 
 try:
     from num2words import num2words
@@ -31,622 +35,332 @@ except ImportError:
 # ---------------------------
 
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
-
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # ============================================================
-# DATABASE HELPER
+# DATABASE HELPER (SQLite Version - Easy to Connect)
 # ============================================================
+DB_PATH = "invoice_data.db"
+
 def get_db():
-    """Create and return a MySQL database connection using env vars or config."""
-    # Priority 1: Check for Railway's native environment variables
-    # Priority 2: Check for custom environment variables (Render/Other)
-    # Priority 3: Fallback to the local DB_CONFIG from config.py
-    
-    host = os.environ.get('MYSQLHOST', os.environ.get('DB_HOST', DB_CONFIG.get('host', 'localhost')))
-    user = os.environ.get('MYSQLUSER', os.environ.get('DB_USER', DB_CONFIG.get('user', 'root')))
-    password = os.environ.get('MYSQLPASSWORD', os.environ.get('DB_PASSWORD', DB_CONFIG.get('password', '')))
-    database = os.environ.get('MYSQLDATABASE', os.environ.get('DB_NAME', DB_CONFIG.get('database', '')))
-    port = int(os.environ.get('MYSQLPORT', os.environ.get('DB_PORT', DB_CONFIG.get('port', 3306))))
+    """Create and return a SQLite database connection."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # Access columns by name
+    return conn
 
-    return mysql.connector.connect(
-        host=host,
-        user=user,
-        password=password,
-        database=database,
-        port=port
-    )
+def init_db():
+    """Initialize the SQLite database and create tables if they don't exist."""
+    db = get_db()
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS owner_info (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT, address TEXT, city TEXT, state_name TEXT,
+            state_code TEXT, gstin TEXT, phone TEXT, email TEXT,
+            bank_name TEXT, account_no TEXT, ifsc_code TEXT, branch TEXT,
+            declaration_text TEXT
+        );
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT, address TEXT, city TEXT, state_name TEXT,
+            state_code TEXT, gstin TEXT, phone TEXT, email TEXT
+        );
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name TEXT, hsn TEXT, default_price REAL, default_tax REAL, unit TEXT
+        );
+        CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_no TEXT, invoice_date TEXT,
+            buyer_name TEXT, buyer_address TEXT, buyer_city TEXT, buyer_state TEXT,
+            buyer_state_code TEXT, buyer_gstin TEXT, buyer_phone TEXT,
+            ship_to_name TEXT, ship_to_address TEXT, ship_to_city TEXT,
+            ship_to_state TEXT, ship_to_state_code TEXT, ship_to_gstin TEXT,
+            delivery_note TEXT, payment_mode TEXT, reference_no TEXT,
+            other_references TEXT, buyer_order_no TEXT, buyer_order_date TEXT,
+            dispatch_doc_no TEXT, delivery_note_date TEXT,
+            dispatched_through TEXT, destination TEXT, terms_of_delivery TEXT,
+            tax_type TEXT, custom_tax_rate REAL,
+            subtotal REAL, tax_amount REAL, grand_total REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id INTEGER, sl_no INTEGER, description TEXT, hsn TEXT,
+            quantity REAL, rate REAL, per_unit TEXT, discount_percent REAL, amount REAL,
+            FOREIGN KEY(invoice_id) REFERENCES invoices(id)
+        );
+        CREATE TABLE IF NOT EXISTS invoice_counter (
+            id INTEGER PRIMARY KEY, prefix TEXT, last_number INTEGER
+        );
+    """)
+    db.commit()
+    db.close()
 
+# Run initialization on startup
+init_db()
 
 # ============================================================
-# NUMBER TO WORDS CONVERSION
+# FIXED: NUMBER TO WORDS CONVERSION (Handles Tax properly)
 # ============================================================
 def number_to_words(amount):
-    """Convert a numeric amount to Indian English words."""
-    if NUM2WORDS_AVAILABLE:
-        rupees = int(amount)
-        paise = round((amount - rupees) * 100)
-        words = num2words(rupees, lang='en_IN').title()
-        if paise > 0:
-            paise_words = num2words(paise, lang='en_IN').title()
-            return f"Indian Rupee {words} and {paise_words} Paise Only"
-        return f"Indian Rupee {words} Only"
-    else:
-        return f"Indian Rupee {int(amount)} Only"
-
+    """Convert amount to Indian Rupee words format."""
+    try:
+        amount = round(float(amount), 2)  # Critical: Round to 2 decimal places
+        if amount <= 0:
+            return "Indian Rupee Zero Only"
+            
+        if NUM2WORDS_AVAILABLE:
+            rupees = int(amount)
+            # This logic extracts the decimal part as whole paise
+            paise = int(round((amount - rupees) * 100))
+            
+            words = num2words(rupees, lang='en_IN').title()
+            if paise > 0:
+                paise_words = num2words(paise, lang='en_IN').title()
+                return f"Indian Rupee {words} and {paise_words} Paise Only"
+            return f"Indian Rupee {words} Only"
+        return f"₹ {amount} Only"
+    except Exception as e:
+        print(f"Error in words conversion: {e}")
+        return "Indian Rupee Zero Only"
 
 # ============================================================
-# INDIAN STATES LIST (for dropdown)
+# INDIAN STATES LIST
 # ============================================================
 INDIAN_STATES = [
-    {"name": "Andhra Pradesh", "code": "37"},
-    {"name": "Arunachal Pradesh", "code": "12"},
-    {"name": "Assam", "code": "18"},
-    {"name": "Bihar", "code": "10"},
-    {"name": "Chhattisgarh", "code": "22"},
-    {"name": "Delhi", "code": "07"},
-    {"name": "Goa", "code": "30"},
-    {"name": "Gujarat", "code": "24"},
-    {"name": "Haryana", "code": "06"},
-    {"name": "Himachal Pradesh", "code": "02"},
-    {"name": "Jharkhand", "code": "20"},
-    {"name": "Karnataka", "code": "29"},
-    {"name": "Kerala", "code": "32"},
-    {"name": "Madhya Pradesh", "code": "23"},
-    {"name": "Maharashtra", "code": "27"},
-    {"name": "Manipur", "code": "14"},
-    {"name": "Meghalaya", "code": "17"},
-    {"name": "Mizoram", "code": "15"},
-    {"name": "Nagaland", "code": "13"},
-    {"name": "Odisha", "code": "21"},
-    {"name": "Punjab", "code": "03"},
-    {"name": "Rajasthan", "code": "08"},
-    {"name": "Sikkim", "code": "11"},
-    {"name": "Tamil Nadu", "code": "33"},
-    {"name": "Telangana", "code": "36"},
-    {"name": "Tripura", "code": "16"},
-    {"name": "Uttar Pradesh", "code": "09"},
-    {"name": "Uttarakhand", "code": "05"},
-    {"name": "West Bengal", "code": "19"},
-    {"name": "Jammu & Kashmir", "code": "01"},
-    {"name": "Ladakh", "code": "38"},
-    {"name": "Chandigarh", "code": "04"},
-    {"name": "Puducherry", "code": "34"},
-    {"name": "Lakshadweep", "code": "31"},
+    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Arunachal Pradesh", "code": "12"},
+    {"name": "Assam", "code": "18"}, {"name": "Bihar", "code": "10"},
+    {"name": "Chhattisgarh", "code": "22"}, {"name": "Delhi", "code": "07"},
+    {"name": "Goa", "code": "30"}, {"name": "Gujarat", "code": "24"},
+    {"name": "Haryana", "code": "06"}, {"name": "Himachal Pradesh", "code": "02"},
+    {"name": "Jharkhand", "code": "20"}, {"name": "Karnataka", "code": "29"},
+    {"name": "Kerala", "code": "32"}, {"name": "Madhya Pradesh", "code": "23"},
+    {"name": "Maharashtra", "code": "27"}, {"name": "Manipur", "code": "14"},
+    {"name": "Meghalaya", "code": "17"}, {"name": "Mizoram", "code": "15"},
+    {"name": "Nagaland", "code": "13"}, {"name": "Odisha", "code": "21"},
+    {"name": "Punjab", "code": "03"}, {"name": "Rajasthan", "code": "08"},
+    {"name": "Sikkim", "code": "11"}, {"name": "Tamil Nadu", "code": "33"},
+    {"name": "Telangana", "code": "36"}, {"name": "Tripura", "code": "16"},
+    {"name": "Uttar Pradesh", "code": "09"}, {"name": "Uttarakhand", "code": "05"},
+    {"name": "West Bengal", "code": "19"}, {"name": "Jammu & Kashmir", "code": "01"},
+    {"name": "Ladakh", "code": "38"}, {"name": "Chandigarh", "code": "04"},
+    {"name": "Puducherry", "code": "34"}, {"name": "Lakshadweep", "code": "31"},
     {"name": "Andaman & Nicobar Islands", "code": "35"},
     {"name": "Dadra & Nagar Haveli and Daman & Diu", "code": "26"},
 ]
 
-
 # ============================================================
 # ROUTES — PAGES
 # ============================================================
-
 @app.route('/')
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-
 # ============================================================
 # ROUTES — OWNER INFO
 # ============================================================
-
 @app.route('/api/owner', methods=['GET'])
 def get_owner():
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM owner_info LIMIT 1")
-    owner = cursor.fetchone()
-    cursor.close()
+    owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     db.close()
-    return jsonify(owner or {})
-
+    return jsonify(dict(owner) if owner else {})
 
 @app.route('/api/owner', methods=['POST'])
 def update_owner():
     data = request.json
     db = get_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT id FROM owner_info LIMIT 1")
-    existing = cursor.fetchone()
+    existing = db.execute("SELECT id FROM owner_info LIMIT 1").fetchone()
+
+    fields = (
+        data.get('company_name', ''), data.get('address', ''), data.get('city', ''),
+        data.get('state_name', ''), data.get('state_code', ''), data.get('gstin', ''),
+        data.get('phone', ''), data.get('email', ''), data.get('bank_name', ''),
+        data.get('account_no', ''), data.get('ifsc_code', ''), data.get('branch', ''),
+        data.get('declaration_text', '')
+    )
 
     if existing:
-        cursor.execute("""
+        db.execute("""
             UPDATE owner_info SET
-                company_name=%s, address=%s, city=%s, state_name=%s,
-                state_code=%s, gstin=%s, phone=%s, email=%s,
-                bank_name=%s, account_no=%s, ifsc_code=%s, branch=%s,
-                declaration_text=%s
-            WHERE id=%s
-        """, (
-            data.get('company_name', ''), data.get('address', ''),
-            data.get('city', ''), data.get('state_name', ''),
-            data.get('state_code', ''), data.get('gstin', ''),
-            data.get('phone', ''), data.get('email', ''),
-            data.get('bank_name', ''), data.get('account_no', ''),
-            data.get('ifsc_code', ''), data.get('branch', ''),
-            data.get('declaration_text', ''), existing[0]
-        ))
+                company_name=?, address=?, city=?, state_name=?, state_code=?, 
+                gstin=?, phone=?, email=?, bank_name=?, account_no=?, 
+                ifsc_code=?, branch=?, declaration_text=?
+            WHERE id=?
+        """, fields + (existing['id'],))
     else:
-        cursor.execute("""
+        db.execute("""
             INSERT INTO owner_info (company_name, address, city, state_name,
                 state_code, gstin, phone, email, bank_name, account_no,
                 ifsc_code, branch, declaration_text)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            data.get('company_name', ''), data.get('address', ''),
-            data.get('city', ''), data.get('state_name', ''),
-            data.get('state_code', ''), data.get('gstin', ''),
-            data.get('phone', ''), data.get('email', ''),
-            data.get('bank_name', ''), data.get('account_no', ''),
-            data.get('ifsc_code', ''), data.get('branch', ''),
-            data.get('declaration_text', '')
-        ))
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, fields)
     db.commit()
-    cursor.close()
     db.close()
     return jsonify({"status": "success"})
-
 
 # ============================================================
 # ROUTES — CUSTOMERS
 # ============================================================
-
 @app.route('/api/customers', methods=['GET'])
 def get_customers():
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM customers ORDER BY customer_name")
-    customers = cursor.fetchall()
-    cursor.close()
+    customers = db.execute("SELECT * FROM customers ORDER BY customer_name").fetchall()
     db.close()
-    return jsonify(customers)
-
-@app.route('/api/customers/<int:cid>', methods=['GET'])
-def get_single_customer(cid):
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM customers WHERE id=%s", (cid,))
-    customer = cursor.fetchone()
-    cursor.close()
-    db.close()
-    return jsonify(customer or {})
+    return jsonify([dict(c) for c in customers])
 
 @app.route('/api/customers', methods=['POST'])
 def add_customer():
     data = request.json
     db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO customers (customer_name, address, city, state_name,
-            state_code, gstin, phone, email)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (
-        data.get('customer_name', ''), data.get('address', ''),
-        data.get('city', ''), data.get('state_name', ''),
-        data.get('state_code', ''), data.get('gstin', ''),
-        data.get('phone', ''), data.get('email', '')
-    ))
+    cur = db.execute("""
+        INSERT INTO customers (customer_name, address, city, state_name, state_code, gstin, phone, email)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (data.get('customer_name', ''), data.get('address', ''), data.get('city', ''), data.get('state_name', ''), data.get('state_code', ''), data.get('gstin', ''), data.get('phone', ''), data.get('email', '')))
     db.commit()
-    new_id = cursor.lastrowid
-    cursor.close()
+    new_id = cur.lastrowid
     db.close()
     return jsonify({"status": "success", "id": new_id})
-
-@app.route('/api/customers/<int:cid>', methods=['PUT'])
-def update_customer(cid):
-    data = request.json
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""
-        UPDATE customers SET
-            customer_name=%s, address=%s, city=%s, state_name=%s,
-            state_code=%s, gstin=%s, phone=%s, email=%s
-        WHERE id=%s
-    """, (
-        data.get('customer_name', ''), data.get('address', ''),
-        data.get('city', ''), data.get('state_name', ''),
-        data.get('state_code', ''), data.get('gstin', ''),
-        data.get('phone', ''), data.get('email', ''), cid
-    ))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"status": "success"})
-
-@app.route('/api/customers/<int:cid>', methods=['DELETE'])
-def delete_customer(cid):
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM customers WHERE id=%s", (cid,))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"status": "success"})
-
 
 # ============================================================
 # ROUTES — PRODUCTS
 # ============================================================
-
 @app.route('/api/products', methods=['GET'])
 def get_products():
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM products ORDER BY product_name")
-    products = cursor.fetchall()
-    cursor.close()
+    products = db.execute("SELECT * FROM products ORDER BY product_name").fetchall()
     db.close()
-    for p in products:
-        p['default_price'] = float(p['default_price']) if p['default_price'] else 0
-        p['default_tax'] = float(p['default_tax']) if p['default_tax'] else 0
-    return jsonify(products)
-
-@app.route('/api/products/<int:pid>', methods=['GET'])
-def get_single_product(pid):
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM products WHERE id=%s", (pid,))
-    product = cursor.fetchone()
-    if product:
-        product['default_price'] = float(product['default_price']) if product['default_price'] else 0
-        product['default_tax'] = float(product['default_tax']) if product['default_tax'] else 0
-    cursor.close()
-    db.close()
-    return jsonify(product or {})
+    return jsonify([dict(p) for p in products])
 
 @app.route('/api/products', methods=['POST'])
 def add_product():
     data = request.json
     db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""
+    cur = db.execute("""
         INSERT INTO products (product_name, hsn, default_price, default_tax, unit)
-        VALUES (%s,%s,%s,%s,%s)
-    """, (
-        data.get('product_name', ''), data.get('hsn', ''),
-        data.get('default_price', 0), data.get('default_tax', 0),
-        data.get('unit', 'Nos')
-    ))
+        VALUES (?,?,?,?,?)
+    """, (data.get('product_name', ''), data.get('hsn', ''), data.get('default_price', 0), data.get('default_tax', 0), data.get('unit', 'Nos')))
     db.commit()
-    new_id = cursor.lastrowid
-    cursor.close()
+    new_id = cur.lastrowid
     db.close()
     return jsonify({"status": "success", "id": new_id})
-
-@app.route('/api/products/<int:pid>', methods=['PUT'])
-def update_product(pid):
-    data = request.json
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""
-        UPDATE products SET
-            product_name=%s, hsn=%s, default_price=%s, default_tax=%s, unit=%s
-        WHERE id=%s
-    """, (
-        data.get('product_name', ''), data.get('hsn', ''),
-        data.get('default_price', 0), data.get('default_tax', 0),
-        data.get('unit', 'Nos'), pid
-    ))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"status": "success"})
-
-@app.route('/api/products/<int:pid>', methods=['DELETE'])
-def delete_product(pid):
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM products WHERE id=%s", (pid,))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"status": "success"})
-
-@app.route('/api/products/search', methods=['GET'])
-def search_products():
-    query = request.args.get('q', '')
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute(
-        "SELECT * FROM products WHERE product_name LIKE %s LIMIT 10",
-        (f'%{query}%',)
-    )
-    products = cursor.fetchall()
-    cursor.close()
-    db.close()
-    for p in products:
-        p['default_price'] = float(p['default_price']) if p['default_price'] else 0
-        p['default_tax'] = float(p['default_tax']) if p['default_tax'] else 0
-    return jsonify(products)
-
 
 # ============================================================
 # ROUTES — INVOICES
 # ============================================================
-
 @app.route('/api/invoices/next-number', methods=['GET'])
 def next_invoice_number():
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM invoice_counter LIMIT 1")
-    counter = cursor.fetchone()
+    counter = db.execute("SELECT * FROM invoice_counter LIMIT 1").fetchone()
     if counter:
         next_num = counter['last_number'] + 1
         prefix = counter['prefix']
     else:
         next_num = 1
-        prefix = INVOICE_PREFIX
+        prefix = "INV"
     invoice_no = f"{prefix}-{str(next_num).zfill(4)}"
-    cursor.close()
     db.close()
     return jsonify({"invoice_no": invoice_no, "next_num": next_num})
-
 
 @app.route('/api/invoices', methods=['POST'])
 def save_invoice():
     data = request.json or {}
     db = get_db()
-    cursor = db.cursor()
-
-    def normalize_invoice_datetime(raw_value):
-        if not raw_value:
-            return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
-            try:
-                return datetime.strptime(raw_value, fmt).strftime('%Y-%m-%d %H:%M:%S')
-            except ValueError:
-                continue
-        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+    
     try:
-        invoice_id = data.get('invoice_id')
-        invoice_date = normalize_invoice_datetime(data.get('invoice_date'))
+        invoice_no = data.get('invoice_no')
+        date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        invoice_values = (
-            data.get('invoice_no'), invoice_date,
-            data.get('buyer_name'), data.get('buyer_address'),
-            data.get('buyer_city'), data.get('buyer_state'),
-            data.get('buyer_state_code'), data.get('buyer_gstin'),
-            data.get('buyer_phone'),
-            data.get('ship_to_name'), data.get('ship_to_address'),
-            data.get('ship_to_city'), data.get('ship_to_state'),
-            data.get('ship_to_state_code'), data.get('ship_to_gstin'),
-            data.get('delivery_note'), data.get('payment_mode'),
-            data.get('reference_no'), data.get('other_references'),
-            data.get('buyer_order_no'), data.get('buyer_order_date'),
-            data.get('dispatch_doc_no'), data.get('delivery_note_date'),
-            data.get('dispatched_through'), data.get('destination'),
-            data.get('terms_of_delivery'),
-            data.get('tax_type', 'igst'), data.get('custom_tax_rate', 0),
-            data.get('subtotal', 0), data.get('tax_amount', 0),
-            data.get('grand_total', 0)
-        )
+        cur = db.execute("""
+            INSERT INTO invoices (
+                invoice_no, invoice_date, buyer_name, buyer_address, buyer_city, buyer_state,
+                buyer_state_code, buyer_gstin, buyer_phone, ship_to_name, ship_to_address,
+                ship_to_city, ship_to_state, ship_to_state_code, ship_to_gstin,
+                delivery_note, payment_mode, reference_no, other_references,
+                buyer_order_no, buyer_order_date, dispatch_doc_no, delivery_note_date,
+                dispatched_through, destination, terms_of_delivery, tax_type,
+                custom_tax_rate, subtotal, tax_amount, grand_total
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            invoice_no, date_str, data.get('buyer_name'), data.get('buyer_address'),
+            data.get('buyer_city'), data.get('buyer_state'), data.get('buyer_state_code'),
+            data.get('buyer_gstin'), data.get('buyer_phone'), data.get('ship_to_name'),
+            data.get('ship_to_address'), data.get('ship_to_city'), data.get('ship_to_state'),
+            data.get('ship_to_state_code'), data.get('ship_to_gstin'), data.get('delivery_note'),
+            data.get('payment_mode'), data.get('reference_no'), data.get('other_references'),
+            data.get('buyer_order_no'), data.get('buyer_order_date'), data.get('dispatch_doc_no'),
+            data.get('delivery_note_date'), data.get('dispatched_through'), data.get('destination'),
+            data.get('terms_of_delivery'), data.get('tax_type', 'igst'),
+            data.get('custom_tax_rate', 0), data.get('subtotal', 0),
+            data.get('tax_amount', 0), data.get('grand_total', 0)
+        ))
+        
+        saved_invoice_id = cur.lastrowid
 
-        if invoice_id:
-            cursor.execute("SELECT id FROM invoices WHERE id=%s", (invoice_id,))
-            existing = cursor.fetchone()
-            if not existing:
-                return jsonify({"error": "Invoice not found"}), 404
-
-            cursor.execute("""
-                UPDATE invoices SET
-                    invoice_no=%s, invoice_date=%s,
-                    buyer_name=%s, buyer_address=%s, buyer_city=%s, buyer_state=%s,
-                    buyer_state_code=%s, buyer_gstin=%s, buyer_phone=%s,
-                    ship_to_name=%s, ship_to_address=%s, ship_to_city=%s,
-                    ship_to_state=%s, ship_to_state_code=%s, ship_to_gstin=%s,
-                    delivery_note=%s, payment_mode=%s, reference_no=%s,
-                    other_references=%s, buyer_order_no=%s, buyer_order_date=%s,
-                    dispatch_doc_no=%s, delivery_note_date=%s,
-                    dispatched_through=%s, destination=%s, terms_of_delivery=%s,
-                    tax_type=%s, custom_tax_rate=%s,
-                    subtotal=%s, tax_amount=%s, grand_total=%s
-                WHERE id=%s
-            """, invoice_values + (invoice_id,))
-
-            cursor.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (invoice_id,))
-            saved_invoice_id = invoice_id
-            mode = 'updated'
-        else:
-            cursor.execute("SELECT id, prefix, last_number FROM invoice_counter ORDER BY id ASC LIMIT 1")
-            counter = cursor.fetchone()
-            if counter:
-                counter_id, prefix, last_number = counter
-            else:
-                cursor.execute(
-                    "INSERT INTO invoice_counter (prefix, last_number) VALUES (%s, %s)",
-                    (INVOICE_PREFIX, 0)
-                )
-                counter_id, prefix, last_number = cursor.lastrowid, INVOICE_PREFIX, 0
-
-            next_number = int(last_number) + 1
-            cursor.execute("UPDATE invoice_counter SET last_number=%s WHERE id=%s", (next_number, counter_id))
-
-            invoice_no = data.get('invoice_no')
-            if not invoice_no:
-                invoice_no = f"{prefix}-{str(next_number).zfill(4)}"
-
-            insert_values = (invoice_no,) + invoice_values[1:]
-
-            cursor.execute("""
-                INSERT INTO invoices (
-                    invoice_no, invoice_date,
-                    buyer_name, buyer_address, buyer_city, buyer_state,
-                    buyer_state_code, buyer_gstin, buyer_phone,
-                    ship_to_name, ship_to_address, ship_to_city,
-                    ship_to_state, ship_to_state_code, ship_to_gstin,
-                    delivery_note, payment_mode, reference_no,
-                    other_references, buyer_order_no, buyer_order_date,
-                    dispatch_doc_no, delivery_note_date,
-                    dispatched_through, destination, terms_of_delivery,
-                    tax_type, custom_tax_rate,
-                    subtotal, tax_amount, grand_total
-                ) VALUES (
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
-                )
-            """, insert_values)
-
-            saved_invoice_id = cursor.lastrowid
-            mode = 'created'
-
+        # Save Items
         items = data.get('items', [])
         for item in items:
-            cursor.execute("""
+            db.execute("""
                 INSERT INTO invoice_items (
-                    invoice_id, sl_no, description, hsn,
-                    quantity, rate, per_unit, discount_percent, amount
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                saved_invoice_id, item.get('sl_no'), item.get('description'),
-                item.get('hsn'), item.get('quantity', 0),
-                item.get('rate', 0), item.get('per_unit', 'Nos'),
-                item.get('discount_percent', 0), item.get('amount', 0)
-            ))
+                    invoice_id, sl_no, description, hsn, quantity, rate, per_unit, discount_percent, amount
+                ) VALUES (?,?,?,?,?,?,?,?,?)
+            """, (saved_invoice_id, item.get('sl_no'), item.get('description'), item.get('hsn'),
+                  item.get('quantity', 0), item.get('rate', 0), item.get('per_unit', 'Nos'),
+                  item.get('discount_percent', 0), item.get('amount', 0)))
 
         db.commit()
-        return jsonify({"status": "success", "invoice_id": saved_invoice_id, "mode": mode})
-
-    except mysql.connector.IntegrityError as err:
-        db.rollback()
-        return jsonify({"error": f"Unable to save invoice: {err.msg}"}), 400
-    except mysql.connector.Error as err:
-        db.rollback()
-        return jsonify({"error": f"Database error: {err.msg}"}), 500
+        return jsonify({"status": "success", "invoice_id": saved_invoice_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     finally:
-        cursor.close()
         db.close()
 
-
-@app.route('/api/invoices', methods=['GET'])
-def get_invoices():
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT id, invoice_no, invoice_date, buyer_name, grand_total
-        FROM invoices ORDER BY created_at DESC
-    """)
-    invoices = cursor.fetchall()
-    cursor.close()
-    db.close()
-    for inv in invoices:
-        inv['grand_total'] = float(inv['grand_total']) if inv['grand_total'] else 0
-        if inv['invoice_date']:
-            inv['invoice_date'] = inv['invoice_date'].strftime('%Y-%m-%d %H:%M')
-    return jsonify(invoices)
-
-
-@app.route('/api/invoices/<int:inv_id>', methods=['GET'])
-def get_invoice(inv_id):
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-    invoice = cursor.fetchone()
-    if not invoice:
-        cursor.close()
-        db.close()
-        return jsonify({"error": "Invoice not found"}), 404
-
-    for key in ['subtotal', 'tax_amount', 'grand_total', 'custom_tax_rate']:
-        if invoice.get(key):
-            invoice[key] = float(invoice[key])
-    if invoice.get('invoice_date'):
-        invoice['invoice_date'] = invoice['invoice_date'].strftime('%Y-%m-%dT%H:%M')
-
-    cursor.execute("SELECT * FROM invoice_items WHERE invoice_id=%s ORDER BY sl_no", (inv_id,))
-    items = cursor.fetchall()
-    for item in items:
-        for key in ['quantity', 'rate', 'discount_percent', 'amount']:
-            if item.get(key):
-                item[key] = float(item[key])
-    invoice['items'] = items
-
-    cursor.close()
-    db.close()
-    return jsonify(invoice)
-
-
-@app.route('/api/invoices/<int:inv_id>', methods=['DELETE'])
-def delete_invoice(inv_id):
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM invoices WHERE id=%s", (inv_id,))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"status": "success"})
-
-
 # ============================================================
-# ROUTES — PDF GENERATION
+# ROUTES — PDF GENERATION (Fixed Words Passing)
 # ============================================================
-
 @app.route('/api/invoices/<int:inv_id>/pdf', methods=['GET'])
 def generate_pdf(inv_id):
     if not WEASY_AVAILABLE:
-        return jsonify({"error": "WeasyPrint not installed"}), 500
+        return jsonify({"error": "PDF Engine not ready"}), 500
 
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-    invoice = cursor.fetchone()
+    invoice = db.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
     if not invoice:
-        cursor.close()
         db.close()
         return jsonify({"error": "Invoice not found"}), 404
 
-    for key in ['subtotal', 'tax_amount', 'grand_total', 'custom_tax_rate']:
-        if invoice.get(key):
-            invoice[key] = float(invoice[key])
-
-    cursor.execute("SELECT * FROM invoice_items WHERE invoice_id=%s ORDER BY sl_no", (inv_id,))
-    items = cursor.fetchall()
-    for item in items:
-        for key in ['quantity', 'rate', 'discount_percent', 'amount']:
-            if item.get(key):
-                item[key] = float(item[key])
-
-    cursor.execute("SELECT * FROM owner_info LIMIT 1")
-    owner = cursor.fetchone()
-    cursor.close()
+    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY sl_no", (inv_id,)).fetchall()
+    owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     db.close()
 
-    grand_total_words = number_to_words(float(invoice.get('grand_total', 0)))
-    tax_amount_words = number_to_words(float(invoice.get('tax_amount', 0)))
+    # THE FIX: Calculate words for BOTH Grand Total and Tax specifically
+    grand_total_words = number_to_words(invoice['grand_total'])
+    tax_amount_words = number_to_words(invoice['tax_amount'])
 
     html_content = render_template(
         'invoice_print.html',
-        invoice=invoice,
-        items=items,
-        owner=owner or {},
+        invoice=dict(invoice),
+        items=[dict(i) for i in items],
+        owner=dict(owner) if owner else {},
         grand_total_words=grand_total_words,
         tax_amount_words=tax_amount_words,
         states=INDIAN_STATES
     )
 
-    pdf = WeasyHTML(string=html_content, base_url=request.url_root).write_pdf(variant='pdf/a-1b')
+    pdf = WeasyHTML(string=html_content, base_url=request.url_root).write_pdf()
 
     return Response(
-        pdf,
-        mimetype='application/pdf',
-        headers={
-            'Content-Disposition': f'attachment; filename={invoice["invoice_no"]}.pdf'
-        }
+        pdf, mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={invoice["invoice_no"]}.pdf'}
     )
-
 
 @app.route('/api/number-to-words', methods=['GET'])
 def api_number_to_words():
     amount = float(request.args.get('amount', 0))
     return jsonify({"words": number_to_words(amount)})
 
-
-# ============================================================
-# RUN THE APPLICATION
-# ============================================================
 if __name__ == '__main__':
-    # Automatically get port from environment for Render/Railway
     port = int(os.environ.get("PORT", 5000))
-    # If on Render, debug should ideally be False, but keeping True for your testing
     app.run(host="0.0.0.0", port=port, debug=True)
+
+    
