@@ -10,7 +10,7 @@ import sqlite3
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
 
-# --- PDF & WORDS TOOLS ---
+# --- TOOLS ---
 try:
     from weasyprint import HTML as WeasyHTML
     WEASY_AVAILABLE = True
@@ -27,33 +27,15 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # ============================================================
-# INDIAN STATES LIST (Required for the frontend dropdown)
+# DATABASE & STATES
 # ============================================================
 INDIAN_STATES = [
-    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Arunachal Pradesh", "code": "12"},
-    {"name": "Assam", "code": "18"}, {"name": "Bihar", "code": "10"},
-    {"name": "Chhattisgarh", "code": "22"}, {"name": "Delhi", "code": "07"},
-    {"name": "Goa", "code": "30"}, {"name": "Gujarat", "code": "24"},
-    {"name": "Haryana", "code": "06"}, {"name": "Himachal Pradesh", "code": "02"},
-    {"name": "Jharkhand", "code": "20"}, {"name": "Karnataka", "code": "29"},
-    {"name": "Kerala", "code": "32"}, {"name": "Madhya Pradesh", "code": "23"},
-    {"name": "Maharashtra", "code": "27"}, {"name": "Manipur", "code": "14"},
-    {"name": "Meghalaya", "code": "17"}, {"name": "Mizoram", "code": "15"},
-    {"name": "Nagaland", "code": "13"}, {"name": "Odisha", "code": "21"},
-    {"name": "Punjab", "code": "03"}, {"name": "Rajasthan", "code": "08"},
-    {"name": "Sikkim", "code": "11"}, {"name": "Tamil Nadu", "code": "33"},
-    {"name": "Telangana", "code": "36"}, {"name": "Tripura", "code": "16"},
-    {"name": "Uttar Pradesh", "code": "09"}, {"name": "Uttarakhand", "code": "05"},
-    {"name": "West Bengal", "code": "19"}, {"name": "Jammu & Kashmir", "code": "01"},
-    {"name": "Ladakh", "code": "38"}, {"name": "Chandigarh", "code": "04"},
-    {"name": "Puducherry", "code": "34"}, {"name": "Lakshadweep", "code": "31"},
-    {"name": "Andaman & Nicobar Islands", "code": "35"},
-    {"name": "Dadra & Nagar Haveli and Daman & Diu", "code": "26"},
+    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
+    {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
+    {"name": "Maharashtra", "code": "27"}, {"name": "Tamil Nadu", "code": "33"}
+    # Add more as needed...
 ]
 
-# ============================================================
-# DATABASE HELPER (Volume-Friendly Path)
-# ============================================================
 if not os.path.exists("data"):
     os.makedirs("data")
 
@@ -68,18 +50,15 @@ def init_db():
     db = get_db()
     db.executescript("""
         CREATE TABLE IF NOT EXISTS owner_info (id INTEGER PRIMARY KEY, company_name TEXT, address TEXT, city TEXT, state_name TEXT, state_code TEXT, gstin TEXT, phone TEXT, email TEXT, bank_name TEXT, account_no TEXT, ifsc_code TEXT, branch TEXT, declaration_text TEXT);
+        CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT, address TEXT, city TEXT, state_name TEXT, state_code TEXT, gstin TEXT, phone TEXT, email TEXT);
         CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, product_name TEXT, hsn TEXT, default_price REAL, default_tax REAL, unit TEXT);
-        CREATE TABLE IF NOT EXISTS invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_no TEXT, invoice_date TEXT, buyer_name TEXT, buyer_address TEXT, buyer_city TEXT, buyer_state TEXT, buyer_state_code TEXT, buyer_gstin TEXT, subtotal REAL, tax_amount REAL, grand_total REAL);
-        CREATE TABLE IF NOT EXISTS invoice_items (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER, description TEXT, hsn TEXT, quantity REAL, rate REAL, amount REAL);
+        CREATE TABLE IF NOT EXISTS invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_no TEXT, invoice_date TEXT, buyer_name TEXT, subtotal REAL, tax_amount REAL, grand_total REAL);
     """)
     db.commit()
     db.close()
 
 init_db()
 
-# ============================================================
-# NUMBER TO WORDS
-# ============================================================
 def number_to_words(amount):
     try:
         amount = round(float(amount), 2)
@@ -96,23 +75,44 @@ def number_to_words(amount):
     except: return "Indian Rupee Zero Only"
 
 # ============================================================
-# ROUTES
+# ROUTES (MATCHED TO FRONTEND CALLS)
 # ============================================================
 @app.route('/')
 def index():
-    # FIX: We now pass the states list to the template
     return render_template('invoice.html', states=INDIAN_STATES)
+
+@app.route('/api/customers', methods=['GET', 'POST'])
+def handle_customers():
+    db = get_db()
+    if request.method == 'POST':
+        data = request.json
+        db.execute("INSERT INTO customers (customer_name, gstin) VALUES (?,?)", (data.get('customer_name'), data.get('gstin')))
+        db.commit()
+        db.close()
+        return jsonify({"status": "success"})
+    res = db.execute("SELECT * FROM customers").fetchall()
+    db.close()
+    return jsonify([dict(row) for row in res])
+
+@app.route('/api/products', methods=['GET', 'POST'])
+def handle_products():
+    db = get_db()
+    if request.method == 'POST':
+        data = request.json
+        db.execute("INSERT INTO products (product_name, default_price) VALUES (?,?)", (data.get('product_name'), data.get('default_price')))
+        db.commit()
+        db.close()
+        return jsonify({"status": "success"})
+    res = db.execute("SELECT * FROM products").fetchall()
+    db.close()
+    return jsonify([dict(row) for row in res])
 
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
     db = get_db()
     if request.method == 'POST':
         data = request.json
-        existing = db.execute("SELECT id FROM owner_info LIMIT 1").fetchone()
-        if existing:
-            db.execute("UPDATE owner_info SET company_name=?", (data.get('company_name'),))
-        else:
-            db.execute("INSERT INTO owner_info (company_name) VALUES (?)", (data.get('company_name'),))
+        db.execute("INSERT OR REPLACE INTO owner_info (id, company_name) VALUES (1, ?)", (data.get('company_name'),))
         db.commit()
         db.close()
         return jsonify({"status": "success"})
@@ -124,8 +124,8 @@ def handle_owner():
 def save_invoice():
     data = request.json
     db = get_db()
-    cur = db.execute("INSERT INTO invoices (invoice_no, subtotal, tax_amount, grand_total) VALUES (?,?,?,?)",
-              (data.get('invoice_no'), data.get('subtotal'), data.get('tax_amount'), data.get('grand_total')))
+    cur = db.execute("INSERT INTO invoices (invoice_no, grand_total, tax_amount) VALUES (?,?,?)",
+              (data.get('invoice_no'), data.get('grand_total'), data.get('tax_amount')))
     db.commit()
     inv_id = cur.lastrowid
     db.close()
@@ -135,17 +135,14 @@ def save_invoice():
 def generate_pdf(inv_id):
     db = get_db()
     invoice = db.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
-    owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     db.close()
     
     g_words = number_to_words(invoice['grand_total'])
     t_words = number_to_words(invoice['tax_amount'])
 
-    html = render_template('invoice_print.html', invoice=invoice, owner=owner, 
-                           items=[], grand_total_words=g_words, tax_amount_words=t_words, states=INDIAN_STATES)
-    if WEASY_AVAILABLE:
-        return Response(WeasyHTML(string=html).write_pdf(), mimetype='application/pdf')
-    return html
+    # IMPORTANT: Passing variables for the words
+    return render_template('invoice_print.html', invoice=invoice, 
+                           grand_total_words=g_words, tax_amount_words=t_words, states=INDIAN_STATES)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
