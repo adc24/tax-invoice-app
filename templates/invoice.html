@@ -8,12 +8,8 @@
 </head>
 <body>
 
-<!-- Toast notification -->
 <div id="toast" class="toast"></div>
 
-<!-- ============================================================
-     SIDEBAR — Left navigation panel
-     ============================================================ -->
 <aside class="sidebar">
     <div class="sidebar-header">
         <h2>Tax Invoice</h2>
@@ -38,17 +34,12 @@
     </nav>
 </aside>
 
-<!-- ============================================================
-     MAIN WORKSPACE
-     ============================================================ -->
 <main class="main-workspace">
-
-    <!-- ========== CUSTOMERS PANEL ========== -->
     <div id="customers-panel" class="panel">
         <h3>Manage Customers</h3>
         <div class="panel-form">
             <div><label>Customer Name *</label><input id="new-cust-name" type="text"></div>
-            <div><label>GSTIN</label><input id="new-cust-gstin" type="text" maxlength="15" placeholder="e.g. 29AACCT3705E000"></div>
+            <div><label>GSTIN</label><input id="new-cust-gstin" type="text" maxlength="15"></div>
             <div class="full-width"><label>Address</label><input id="new-cust-address" type="text"></div>
             <div><label>City</label><input id="new-cust-city" type="text"></div>
             <div><label>State</label>
@@ -57,16 +48,16 @@
                     {% for s in states %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
                 </select>
             </div>
-            <div><label>Phone</label><input id="new-cust-phone" type="text" placeholder="+91 XXXXXXXXXX"></div>
+            <div><label>Phone</label><input id="new-cust-phone" type="text"></div>
             <div><label>Email</label><input id="new-cust-email" type="email"></div>
         </div>
         <div class="panel-actions">
-            <button class="btn btn-primary" onclick="addCustomer()">Add Customer</button>
+            <button id="add-customer-btn" class="btn btn-primary" onclick="addCustomer()">Add Customer</button>
+            <button id="cancel-edit-customer-btn" class="btn btn-secondary" style="display:none;" onclick="cancelEditCustomer()">Cancel</button>
         </div>
         <div id="customer-list" style="margin-top:20px;"></div>
     </div>
 
-    <!-- ========== PRODUCTS PANEL ========== -->
     <div id="products-panel" class="panel">
         <h3>Product Catalog</h3>
         <div class="panel-form">
@@ -76,307 +67,105 @@
             <div><label>Default Tax %</label><input id="new-product-tax" type="number" step="0.01"></div>
             <div><label>Unit</label>
                 <select id="new-product-unit">
-                    <option value="Nos">Nos</option><option value="Pcs">Pieces</option>
+                    <option value="Nos">Nos</option><option value="Pcs">Pcs</option>
                     <option value="Kg">Kg</option><option value="Box">Box</option>
-                    <option value="Pkt">Packet</option><option value="Ltr">Litre</option>
-                    <option value="Mtr">Meter</option>
                 </select>
             </div>
         </div>
         <div class="panel-actions">
-            <button class="btn btn-primary" onclick="addProductToCatalog()">Add Product</button>
+            <button id="add-product-btn" class="btn btn-primary" onclick="addProductToCatalog()">Add Product</button>
+            <button id="cancel-edit-product-btn" class="btn btn-secondary" style="display:none;" onclick="cancelEditProduct()">Cancel</button>
         </div>
         <div id="product-catalog-list" style="margin-top:20px;"></div>
     </div>
 
-    <!-- ========== SAVED INVOICES PANEL ========== -->
     <div id="saved-panel" class="panel">
         <h3>Saved Invoices</h3>
         <div id="saved-invoices-list"></div>
     </div>
 
-    <!-- ========== OWNER INFO PANEL ========== -->
     <div id="owner-panel" class="panel">
-        <h3>Edit Owner / Seller Info</h3>
+        <h3>Edit Owner Info</h3>
         <div class="panel-form">
             <div><label>Company Name</label><input id="edit-owner-company" type="text"></div>
-            <div><label>GSTIN</label><input id="edit-owner-gstin" type="text" maxlength="15"></div>
+            <div><label>GSTIN</label><input id="edit-owner-gstin" type="text"></div>
             <div class="full-width"><label>Address</label><input id="edit-owner-address" type="text"></div>
             <div><label>City</label><input id="edit-owner-city" type="text"></div>
             <div><label>State</label>
                 <select id="edit-owner-state">
-                    <option value="">-- Select --</option>
                     {% for s in states %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
                 </select>
             </div>
-            <div><label>Phone</label><input id="edit-owner-phone" type="text"></div>
-            <div><label>Email</label><input id="edit-owner-email" type="email"></div>
-            <div><label>Bank Name</label><input id="edit-owner-bank" type="text"></div>
-            <div><label>Account No</label><input id="edit-owner-account" type="text"></div>
-            <div><label>IFSC Code</label><input id="edit-owner-ifsc" type="text"></div>
-            <div><label>Branch</label><input id="edit-owner-branch" type="text"></div>
-            <div class="full-width"><label>Declaration Text</label>
-                <textarea id="edit-owner-declaration" rows="3"></textarea>
-            </div>
+            <div class="full-width"><label>Declaration</label><textarea id="edit-owner-declaration" rows="3"></textarea></div>
         </div>
-        <div class="panel-actions">
-            <button class="btn btn-primary" onclick="saveOwnerInfo()">Save Owner Info</button>
-        </div>
+        <div class="panel-actions"><button class="btn btn-primary" onclick="saveOwnerInfo()">Save Info</button></div>
     </div>
 
-    <!-- ============================================================
-         INVOICE PANEL — The A4 document
-         ============================================================ -->
     <div id="invoice-panel" class="invoice-panel active">
-
-        <!-- Customer selector bar -->
-        <div class="customer-selector" style="max-width:210mm; margin:0 auto 8px; background:#fff; padding:8px 12px; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <span style="font-weight:500;">Customer:</span>
+        <div class="customer-selector">
+            <span>Customer:</span>
             <select id="customer-select" onchange="selectCustomer()">
                 <option value="">-- Manual Entry --</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="saveCurrentCustomer()">Save Customer</button>
+            <button class="btn btn-secondary btn-sm" onclick="saveCurrentCustomer()">Save to List</button>
         </div>
 
-        <!-- Tax type selector -->
-        <div class="tax-selector" style="max-width:210mm; margin:0 auto 8px; background:#fff; padding:8px 12px; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <strong>Tax:</strong>
-            <label><input type="radio" name="tax-type" value="igst" checked> IGST</label>
-            <label><input type="radio" name="tax-type" value="cgst_sgst"> CGST+SGST</label>
-            <label><input type="radio" name="tax-type" value="none"> No Tax</label>
-            <label><input type="radio" name="tax-type" value="custom"> Custom</label>
-            <span id="custom-tax-wrapper" style="display:none; align-items:center; gap:4px;">
-                <input type="number" id="custom-tax-rate" class="custom-rate-input" placeholder="%" step="0.01">%
-            </span>
-        </div>
-
-        <!-- ===== A4 CONTAINER ===== -->
         <div class="a4-container">
-
-            <!-- Title -->
             <div class="invoice-title">TAX INVOICE</div>
-
-            <!-- Top section: Owner left, Invoice fields right -->
             <div class="invoice-top">
-
-                <!-- LEFT: Owner + Consignee + Buyer -->
                 <div class="invoice-left">
-                    <!-- Owner/Seller info -->
                     <div class="section">
-                        <input type="text" id="owner-company" class="invoice-input bold" value="National Enterprises" placeholder="Company Name">
-                        <input type="text" id="owner-address" class="invoice-input" value="HSR Layout" placeholder="Address">
-                        <input type="text" id="owner-city" class="invoice-input" value="Bangalore" placeholder="City">
-                        <div class="info-line">
-                            GSTIN/UIN: <input type="text" id="owner-gstin" class="invoice-input" style="width:auto; display:inline; max-width:180px;" value="29AACCT3705E000">
-                        </div>
-                        <div class="info-line">
-                            State Name: 
-                            <select id="owner-state" class="invoice-select" style="width:auto; display:inline; max-width:140px;" onchange="updateStateCode('owner')">
-                                <option value="">--</option>
-                                {% for s in states %}<option value="{{ s.name }}" {% if s.name == 'Karnataka' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
-                            </select>
-                            , Code: <span id="owner-state-code">29</span>
-                        </div>
+                        <input type="text" id="owner-company" class="invoice-input bold" readonly>
+                        <input type="text" id="owner-address" class="invoice-input" readonly>
+                        <div class="info-line">GSTIN: <input type="text" id="owner-gstin" class="invoice-input" readonly></div>
                     </div>
-
-                    <!-- Consignee (Ship To) -->
                     <div class="section">
-                        <div class="section-label">Consignee (Ship to)</div>
-                        <input type="text" id="ship-name" class="invoice-input bold" placeholder="Customer Name" oninput="onShipFieldChange()">
-                        <input type="text" id="ship-address" class="invoice-input" placeholder="Address" oninput="onShipFieldChange()">
-                        <div class="info-line">
-                            GSTIN/UIN: <input type="text" id="ship-gstin" class="invoice-input" style="width:auto; display:inline; max-width:180px;" placeholder="GSTIN" oninput="onShipFieldChange()">
-                        </div>
-                        <div class="info-line">
-                            State Name: 
-                            <select id="ship-state" class="invoice-select" style="width:auto; display:inline; max-width:140px;" onchange="updateStateCode('ship'); onShipFieldChange();">
-                                <option value="">--</option>
-                                {% for s in states %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
-                            </select>
-                            , Code: <span id="ship-state-code"></span>
-                        </div>
-                    </div>
-
-                    <!-- Buyer (Bill To) -->
-                    <div class="section">
-                        <div class="section-label">
-                            Buyer (Bill to)
-                            <span class="ship-bill-toggle" style="display:inline; margin-left:10px;">
-                                <input type="checkbox" id="same-as-ship" checked>
-                                <label for="same-as-ship" style="font-size:10px; color:#6b7280;">Same as Ship To</label>
-                            </span>
-                        </div>
-                        <input type="text" id="bill-name" class="invoice-input bold" placeholder="Customer Name">
+                        <div class="section-label">Buyer (Bill to)</div>
+                        <input type="text" id="bill-name" class="invoice-input bold" placeholder="Name">
                         <input type="text" id="bill-address" class="invoice-input" placeholder="Address">
-                        <div class="info-line">
-                            GSTIN/UIN: <input type="text" id="bill-gstin" class="invoice-input" style="width:auto; display:inline; max-width:180px;" placeholder="GSTIN">
-                        </div>
-                        <div class="info-line">
-                            State Name: 
-                            <select id="bill-state" class="invoice-select" style="width:auto; display:inline; max-width:140px;" onchange="updateStateCode('bill')">
-                                <option value="">--</option>
-                                {% for s in states %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
-                            </select>
-                            , Code: <span id="bill-state-code"></span>
-                        </div>
+                        <input type="text" id="bill-gstin" class="invoice-input" placeholder="GSTIN">
                     </div>
                 </div>
-
-                <!-- RIGHT: Invoice metadata fields -->
                 <div class="invoice-right">
                     <div class="field-row">
-                        <div class="field"><span class="field-label">Invoice No.</span>
-                            <input type="text" id="invoice-no" class="invoice-input" value="INV-0001"></div>
-                        <div class="field"><span class="field-label">Dated</span>
-                            <input type="datetime-local" id="invoice-date" class="invoice-input"></div>
-                    </div>
-                    <div class="field-row">
-                        <div class="field"><span class="field-label">Delivery Note</span>
-                            <input type="text" id="delivery-note" class="invoice-input"></div>
-                        <div class="field"><span class="field-label">Mode/Terms of Payment</span>
-                            <select id="payment-mode" class="invoice-select">
-                                <option value="">--</option>
-                                <option value="Cash">Cash</option>
-                                <option value="UPI">UPI</option>
-                                <option value="Card">Card</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="Cheque">Cheque</option>
-                                <option value="Credit">Credit</option>
-                            </select></div>
-                    </div>
-                    <div class="field-row">
-                        <div class="field"><span class="field-label">Reference No. & Date</span>
-                            <input type="text" id="reference-no" class="invoice-input"></div>
-                        <div class="field"><span class="field-label">Other References</span>
-                            <input type="text" id="other-ref" class="invoice-input"></div>
-                    </div>
-                    <div class="field-row">
-                        <div class="field"><span class="field-label">Buyer's Order No.</span>
-                            <input type="text" id="buyer-order-no" class="invoice-input"></div>
-                        <div class="field"><span class="field-label">Dated</span>
-                            <input type="text" id="buyer-order-date" class="invoice-input"></div>
-                    </div>
-                    <div class="field-row">
-                        <div class="field"><span class="field-label">Dispatch Doc No.</span>
-                            <input type="text" id="dispatch-doc-no" class="invoice-input"></div>
-                        <div class="field"><span class="field-label">Delivery Note Date</span>
-                            <input type="text" id="delivery-note-date" class="invoice-input"></div>
-                    </div>
-                    <div class="field-row">
-                        <div class="field"><span class="field-label">Dispatched through</span>
-                            <input type="text" id="dispatched-through" class="invoice-input"></div>
-                        <div class="field"><span class="field-label">Destination</span>
-                            <input type="text" id="destination" class="invoice-input"></div>
-                    </div>
-                    <div class="field-row full">
-                        <div class="field"><span class="field-label">Terms of Delivery</span>
-                            <input type="text" id="terms-delivery" class="invoice-input"></div>
+                        <div class="field"><span class="field-label">Inv No.</span><input type="text" id="invoice-no"></div>
+                        <div class="field"><span class="field-label">Date</span><input type="datetime-local" id="invoice-date"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- ===== PRODUCT TABLE ===== -->
             <table class="product-table">
-                <thead>
-                    <tr>
-                        <th class="col-sl">Sl<br>No.</th>
-                        <th class="col-desc">Description of Goods</th>
-                        <th class="col-hsn">HSN/SAC</th>
-                        <th class="col-qty">Quantity</th>
-                        <th class="col-rate">Rate</th>
-                        <th class="col-per">per</th>
-                        <th class="col-disc">Disc. %</th>
-                        <th class="col-amount">Amount</th>
-                    </tr>
-                </thead>
-                <tbody id="product-tbody">
-                    <!-- Product rows inserted by JS -->
-                </tbody>
+                <thead><tr><th>Sl.</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Unit</th><th>Disc%</th><th>Amount</th></tr></thead>
+                <tbody id="product-tbody"></tbody>
                 <tfoot>
                     <tr class="total-row">
-                        <td colspan="3" style="text-align:right; font-weight:700;">Total</td>
-                        <td id="total-qty">0</td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td class="text-right" id="subtotal-amount">0.00</td>
+                        <td colspan="3" class="text-right">Total</td>
+                        <td id="total-qty">0</td><td colspan="3"></td>
+                        <td id="subtotal-amount" class="text-right">0.00</td>
                     </tr>
                 </tfoot>
             </table>
 
-            <!-- Tax row inside invoice -->
-            <div style="display:flex; justify-content:flex-end; padding:2px 10px; border-bottom:1px solid #9CA3AF; font-size:12px;">
-                <span style="margin-right:20px;">Tax:</span>
-                <span id="tax-amount-display">0.00</span>
+            <div class="grand-total-section">
+                <div class="total-row"><span>Grand Total:</span> <span id="grand-total-display">₹ 0.00</span></div>
             </div>
 
-            <!-- Grand total -->
-            <div style="display:flex; justify-content:flex-end; padding:4px 10px; border-bottom:2px solid #1A1A1A; font-size:14px; font-weight:700;">
-                <span style="margin-right:20px;">Grand Total:</span>
-                <span id="grand-total-display">₹ 0.00</span>
-            </div>
-
-            <!-- Amount in words -->
             <div class="amount-chargeable">
-                <div>
-                    <div class="label">Amount Chargeable (in words)</div>
-                    <div class="words" id="amount-words">Indian Rupee Zero Only</div>
-                </div>
-                <div class="eoe">E. & O.E</div>
+                <div class="label">Amount in Words:</div>
+                <div id="amount-words" class="words">Indian Rupee Zero Only</div>
             </div>
-
-            <!-- Tax Summary Table -->
-            <table class="tax-summary-table">
-                <thead id="tax-summary-thead">
-                    <tr>
-                        <th rowspan="2">HSN/SAC</th>
-                        <th rowspan="2">Taxable Value</th>
-                        <th colspan="2">Integrated Tax</th>
-                        <th rowspan="2">Total Tax Amount</th>
-                    </tr>
-                    <tr>
-                        <th>Rate</th><th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody id="tax-summary-tbody"></tbody>
-            </table>
-
-            <!-- Tax amount in words -->
-            <div class="tax-words" id="tax-words">Tax Amount (in words) : Indian Rupee Zero Only</div>
-
-            <!-- Declaration + Signatory -->
-            <div class="invoice-footer-bottom">
-                <div class="declaration">
-                    <strong>Declaration</strong>
-                    We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                </div>
-                <div class="signatory">
-                    <div class="for-company" id="signatory-company">for National Enterprises</div>
-                    <div class="auth-label">Authorised Signatory</div>
-                </div>
-            </div>
-
-            <!-- Computer generated text -->
-            <div class="computer-generated">This is a Computer Generated Invoice</div>
-
-        </div><!-- end .a4-container -->
-
-        <!-- Action buttons -->
-        <div class="action-bar">
-            <button id="print-invoice-btn" class="btn btn-primary" onclick="printInvoice()">🖨️ Print Invoice</button>
-            <button id="download-pdf-btn" class="btn btn-primary" onclick="downloadPDF()">📥 Download PDF</button>
-            <button id="save-invoice-btn" class="btn btn-primary" onclick="saveInvoice()">💾 Save Invoice</button>
-            <button id="new-invoice-btn" class="btn btn-secondary" onclick="newInvoice()">+ New Invoice</button>
+            <div id="tax-words" class="tax-words">Tax Amount (in words): Indian Rupee Zero Only</div>
         </div>
 
-    </div><!-- end #invoice-panel -->
-
+        <div class="action-bar">
+            <button class="btn btn-primary" onclick="saveInvoice()">💾 Save</button>
+            <button class="btn btn-primary" onclick="downloadPDF()">📥 PDF</button>
+            <button class="btn btn-secondary" onclick="newInvoice()">+ New Invoice</button>
+        </div>
+    </div>
 </main>
 
-<!-- Indian states data for JavaScript -->
-<script>
-var INDIAN_STATES = JSON.parse('{{ states | tojson | safe }}');
-</script>
+<script>var INDIAN_STATES = JSON.parse('{{ states | tojson | safe }}');</script>
 <script src="/static/js/invoice.js"></script>
 </body>
 </html>

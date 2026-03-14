@@ -26,7 +26,7 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# --- CONFIG ---
+# --- CONFIG & DATABASE ---
 INDIAN_STATES = [
     {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
     {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
@@ -50,14 +50,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT, address TEXT, city TEXT, state_name TEXT, state_code TEXT, gstin TEXT, phone TEXT, email TEXT);
         CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, product_name TEXT, hsn TEXT, default_price REAL, default_tax REAL, unit TEXT);
         CREATE TABLE IF NOT EXISTS invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_no TEXT, invoice_date TEXT, buyer_name TEXT, buyer_address TEXT, buyer_city TEXT, buyer_state TEXT, buyer_state_code TEXT, buyer_gstin TEXT, subtotal REAL, tax_amount REAL, grand_total REAL);
-        CREATE TABLE IF NOT EXISTS invoice_items (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER, description TEXT, hsn TEXT, quantity REAL, rate REAL, amount REAL);
+        CREATE TABLE IF NOT EXISTS invoice_items (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER, sl_no INTEGER, description TEXT, hsn TEXT, quantity REAL, rate REAL, per_unit TEXT, discount_percent REAL, amount REAL, FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE);
     """)
     db.commit()
     db.close()
 
 init_db()
 
-def convert_to_words(amount):
+def number_to_words(amount):
     try:
         amount = round(float(amount or 0), 2)
         if amount <= 0: return "Indian Rupee Zero Only"
@@ -70,24 +70,23 @@ def convert_to_words(amount):
         return res + " Only"
     except: return "Indian Rupee Zero Only"
 
-# --- API ROUTES ---
+# --- ROUTES ---
 
 @app.route('/')
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-@app.route('/api/convert-words', methods=['POST'])
-def api_convert():
-    data = request.json
-    return jsonify({"words": convert_to_words(data.get('amount', 0))})
+@app.route('/api/number-to-words', methods=['GET'])
+def api_words():
+    amount = request.args.get('amount', 0)
+    return jsonify({"words": number_to_words(amount)})
 
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
     db = get_db()
     if request.method == 'POST':
         d = request.json
-        db.execute("INSERT OR REPLACE INTO owner_info (id, company_name, gstin, address) VALUES (1,?,?,?)", 
-                   (d.get('company_name'), d.get('gstin'), d.get('address')))
+        db.execute("INSERT OR REPLACE INTO owner_info (id, company_name, gstin, address) VALUES (1,?,?,?)", (d.get('company_name'), d.get('gstin'), d.get('address')))
         db.commit()
         return jsonify({"status": "success"})
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
@@ -143,9 +142,8 @@ def handle_invoices():
     if request.method == 'POST':
         d = request.json
         cur = db.execute("INSERT INTO invoices (invoice_no, grand_total, buyer_name) VALUES (?,?,?)", (d.get('invoice_no'), d.get('grand_total'), d.get('buyer_name')))
-        inv_id = cur.lastrowid
         db.commit()
-        return jsonify({"status": "success", "invoice_id": inv_id})
+        return jsonify({"status": "success", "invoice_id": cur.lastrowid})
     res = db.execute("SELECT * FROM invoices ORDER BY id DESC").fetchall()
     return jsonify([dict(row) for row in res])
 
@@ -164,9 +162,8 @@ def generate_pdf(inv_id):
     db = get_db()
     invoice = db.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
-    g_words = convert_to_words(invoice['grand_total'])
-    t_words = convert_to_words(invoice['tax_amount'] if 'tax_amount' in invoice.keys() else 0)
-    html = render_template('invoice_print.html', invoice=dict(invoice), owner=dict(owner) if owner else {}, grand_total_words=g_words, tax_amount_words=t_words, items=[])
+    g_words = number_to_words(invoice['grand_total'])
+    html = render_template('invoice_print.html', invoice=dict(invoice), owner=dict(owner) if owner else {}, grand_total_words=g_words, items=[])
     if WEASY_AVAILABLE:
         pdf = WeasyHTML(string=html).write_pdf()
         return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename=Invoice_{inv_id}.pdf'})
