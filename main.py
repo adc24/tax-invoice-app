@@ -27,9 +27,14 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # ============================================================
-# DATABASE HELPER
+# DATABASE HELPER (Volume-Friendly Path)
 # ============================================================
-DB_PATH = os.path.join(os.getcwd(), "invoice_data.db")
+# Create a 'data' folder if it doesn't exist to house the SQLite file
+if not os.path.exists("data"):
+    os.makedirs("data")
+
+# Path must point inside the 'data' folder for the volume to work correctly
+DB_PATH = os.path.join(os.getcwd(), "data", "invoice_data.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -119,6 +124,5 @@ def generate_pdf(inv_id):
     return html
 
 if __name__ == '__main__':
-    # Railway uses port 8080 by default, Flask uses 5000. This covers both.
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
