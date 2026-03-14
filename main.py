@@ -26,7 +26,6 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# --- CONFIG ---
 INDIAN_STATES = [
     {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
     {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
@@ -57,27 +56,30 @@ def init_db():
 
 init_db()
 
-def number_to_words(amount):
+def convert_to_words(amount):
     try:
         amount = round(float(amount or 0), 2)
         if amount <= 0: return "Indian Rupee Zero Only"
         rupees = int(amount)
         paise = int(round((amount - rupees) * 100))
         words = num2words(rupees, lang='en_IN').title()
+        res = f"Indian Rupee {words}"
         if paise > 0:
-            paise_words = num2words(paise, lang='en_IN').title()
-            return f"Indian Rupee {words} and {paise_words} Paise Only"
-        return f"Indian Rupee {words} Only"
+            res += f" and {num2words(paise, lang='en_IN').title()} Paise"
+        return res + " Only"
     except: return "Indian Rupee Zero Only"
 
-# ============================================================
-# ROUTES
-# ============================================================
 @app.route('/')
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-# --- OWNER INFO (Fix: This is what keeps your data on New Invoice) ---
+# --- NEW: Word Converter for Preview ---
+@app.route('/api/convert-words', methods=['POST'])
+def api_convert():
+    amount = request.json.get('amount', 0)
+    return jsonify({"words": convert_to_words(amount)})
+
+# --- OWNER INFO (Fix: This route ensures it's never cleared) ---
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
     db = get_db()
@@ -90,9 +92,9 @@ def handle_owner():
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     return jsonify(dict(owner) if owner else {})
 
-# --- CUSTOMER & PRODUCT CRUD (Fix: Edit/Delete now work) ---
+# --- CUSTOMERS ---
 @app.route('/api/customers', methods=['GET', 'POST'])
-def api_customers():
+def handle_customers():
     db = get_db()
     if request.method == 'POST':
         d = request.json
@@ -109,12 +111,13 @@ def update_customer(id):
         db.execute("DELETE FROM customers WHERE id=?", (id,))
     else:
         d = request.json
-        db.execute("UPDATE customers SET customer_name=?, gstin=?, address=? WHERE id=?", (d.get('customer_name'), d.get('gstin'), d.get('address'), id))
+        db.execute("UPDATE customers SET customer_name=?, gstin=? WHERE id=?", (d.get('customer_name'), d.get('gstin'), id))
     db.commit()
     return jsonify({"status": "success"})
 
+# --- PRODUCTS ---
 @app.route('/api/products', methods=['GET', 'POST'])
-def api_products():
+def handle_products():
     db = get_db()
     if request.method == 'POST':
         d = request.json
@@ -135,9 +138,9 @@ def update_product(id):
     db.commit()
     return jsonify({"status": "success"})
 
-# --- INVOICES (Fix: Saved View/Edit) ---
+# --- INVOICES ---
 @app.route('/api/invoices', methods=['GET', 'POST'])
-def api_invoices():
+def handle_invoices():
     db = get_db()
     if request.method == 'POST':
         d = request.json
@@ -164,7 +167,6 @@ def handle_single_invoice(id):
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (id,)).fetchall()
     return jsonify({"invoice": dict(inv), "items": [dict(i) for i in items]})
 
-# --- PDF (Fix: Both Total and Tax Words correctly mapped) ---
 @app.route('/api/invoices/<int:inv_id>/pdf')
 def generate_pdf(inv_id):
     db = get_db()
@@ -172,8 +174,8 @@ def generate_pdf(inv_id):
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (inv_id,)).fetchall()
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     
-    g_words = number_to_words(invoice['grand_total'])
-    t_words = number_to_words(invoice['tax_amount'])
+    g_words = convert_to_words(invoice['grand_total'])
+    t_words = convert_to_words(invoice['tax_amount'])
 
     html = render_template('invoice_print.html', invoice=dict(invoice), owner=dict(owner) if owner else {}, 
                            items=[dict(i) for i in items], grand_total_words=g_words, tax_amount_words=t_words)

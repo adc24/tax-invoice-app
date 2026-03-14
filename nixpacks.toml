@@ -1,0 +1,2 @@
+[phases.setup]
+nixPkgs = ["...", "pango", "cairo", "libxml2", "libxslt", "libffi"]
