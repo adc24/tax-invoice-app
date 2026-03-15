@@ -898,12 +898,41 @@ function deleteInvoice(id) {
 // ============================================================
 function printInvoice() { window.print(); }
 
-function downloadPDF() {
-    showToast('Generating PDF...');
-    saveInvoice(false).then(result => {
-        const id = result.invoice_id || currentInvoiceId;
-        window.location.href = `/api/invoices/${id}/pdf`;
-    });
+async function downloadPDF() {
+    showToast('Preparing professional PDF...');
+
+    const element = document.querySelector('.a4-container');
+    const invoiceNo = document.getElementById('invoice-no').value || 'Invoice';
+
+    // 1. Temporarily hide interactive buttons for a clean PDF
+    const uiElements = document.querySelectorAll('.qty-btn, .row-action-btn');
+    uiElements.forEach(el => el.style.visibility = 'hidden');
+
+    const opt = {
+        margin: [5, 5, 5, 5], // Top, Left, Bottom, Right in mm
+        filename: `${invoiceNo}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            letterRendering: true,
+            scrollX: 0,
+            scrollY: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // 2. Generate PDF
+    try {
+        await html2pdf().set(opt).from(element).save();
+        showToast('PDF Downloaded!');
+    } catch (err) {
+        console.error(err);
+        showToast('Error generating PDF', true);
+    } finally {
+        // 3. Bring buttons back after capture
+        uiElements.forEach(el => el.style.visibility = 'visible');
+    }
 }
 
 

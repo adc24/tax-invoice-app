@@ -253,15 +253,21 @@ body {
    A4 INVOICE CONTAINER — The paper on the desk
    ============================================================ */
 .a4-container {
-    width: 210mm;
-    min-height: auto; /* FIXED: Changed from 297mm to auto to stop page spillover */
-    background: #ffffff;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
-    margin: 0 auto;
-    padding: 0;
+    width: 210mm !important; /* Fixed A4 Width */
+    min-height: 297mm;
+    margin: 0 auto !important;
+    padding: 10mm;
+    background: white;
+    box-sizing: border-box;
     position: relative;
-    border: 2px solid #1A1A1A; 
-    box-sizing: border-box; 
+    border: 1px solid #eee;
+}
+
+/* Hide the +/- buttons and UI elements in the PDF */
+@media print {
+    .qty-btn, .row-action-btn, .action-bar, .sidebar, .tax-selector, .customer-selector {
+        display: none !important;
+    }
 }
 
 /* ============================================================
