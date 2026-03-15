@@ -120,6 +120,7 @@ function loadOwnerInfo() {
                 document.getElementById('owner-company').value = data.company_name || '';
                 document.getElementById('owner-address').value = data.address || '';
                 document.getElementById('owner-city').value = data.city || '';
+                
                 // Set state dropdown
                 const stateSelect = document.getElementById('owner-state');
                 if (stateSelect && data.state_name) {
@@ -128,7 +129,14 @@ function loadOwnerInfo() {
                     if (codeEl) codeEl.textContent = data.state_code || '';
                 }
                 document.getElementById('owner-gstin').value = data.gstin || '';
+
+                // --- FIXED: Update the Signature Section ---
+                const sigCompany = document.getElementById('signatory-company-name');
+                if (sigCompany) {
+                    sigCompany.textContent = 'for ' + (data.company_name || 'National Enterprises');
+                }
             }
+
             // Populate owner edit panel
             if (document.getElementById('edit-owner-company')) {
                 document.getElementById('edit-owner-company').value = data.company_name || '';

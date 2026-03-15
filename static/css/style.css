@@ -597,11 +597,13 @@ body {
 }
 
 .tax-summary-table tfoot td {
-    border: 1px solid #1A1A1A;
+    border: 1px solid #1A1A1A !important;
     background-color: #ffffff;
     font-size: 11px;
     height: 30px;
     vertical-align: middle;
+    padding-left: 10px;
+    font-weight: bold;
 }
 
 /* Tax words row */
