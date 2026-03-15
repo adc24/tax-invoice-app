@@ -124,7 +124,8 @@ function loadOwnerInfo() {
                 const stateSelect = document.getElementById('owner-state');
                 if (stateSelect && data.state_name) {
                     stateSelect.value = data.state_name;
-                    document.getElementById('owner-state-code').textContent = data.state_code || '';
+                    const codeEl = document.getElementById('owner-state-code');
+                    if (codeEl) codeEl.textContent = data.state_code || '';
                 }
                 document.getElementById('owner-gstin').value = data.gstin || '';
             }
@@ -234,8 +235,7 @@ function editProduct(id) {
     document.getElementById('new-product-tax').value = p.default_tax;
     document.getElementById('new-product-unit').value = p.unit;
 
-    // Change button text
-    const btn = document.querySelector('#product-panel .btn-primary');
+    const btn = document.querySelector('#products-panel .btn-primary');
     if (btn) btn.textContent = 'Update Product';
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -279,7 +279,7 @@ function resetProductForm() {
     document.getElementById('new-product-price').value = '';
     document.getElementById('new-product-tax').value = '';
     document.getElementById('new-product-unit').value = 'Nos';
-    const btn = document.querySelector('#product-panel .btn-primary');
+    const btn = document.querySelector('#products-panel .btn-primary');
     if (btn) btn.textContent = 'Add Product';
 }
 
@@ -407,7 +407,7 @@ function editCustomer(id) {
     document.getElementById('new-cust-phone').value = c.phone || '';
     document.getElementById('new-cust-email').value = c.email || '';
 
-    const btn = document.querySelector('#customer-panel .btn-primary');
+    const btn = document.querySelector('#customers-panel .btn-primary');
     if (btn) btn.textContent = 'Update Customer';
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -456,7 +456,7 @@ function resetCustomerForm() {
     document.getElementById('new-cust-gstin').value = '';
     document.getElementById('new-cust-phone').value = '';
     document.getElementById('new-cust-email').value = '';
-    const btn = document.querySelector('#customer-panel .btn-primary');
+    const btn = document.querySelector('#customers-panel .btn-primary');
     if (btn) btn.textContent = 'Add Customer';
 }
 
@@ -474,7 +474,7 @@ function deleteCustomer(id) {
 function populateCustomerDropdown() {
     const select = document.getElementById('customer-select');
     if (!select) return;
-    select.innerHTML = '<option value="">-- Select Customer --</option>';
+    select.innerHTML = '<option value="">-- Manual Entry --</option>';
     customers.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
@@ -502,6 +502,21 @@ function selectCustomer() {
     
     const sameCheckbox = document.getElementById('same-as-ship');
     if (sameCheckbox && sameCheckbox.checked) copyShipToBill();
+}
+
+function saveCurrentCustomer() {
+    const data = {
+        customer_name: document.getElementById('bill-name').value,
+        address: document.getElementById('bill-address').value,
+        gstin: document.getElementById('bill-gstin').value,
+        state_name: document.getElementById('bill-state').value
+    };
+    if(!data.customer_name) { showToast('Enter customer name first', true); return; }
+    fetch('/api/customers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(() => { showToast('Customer saved'); loadCustomers(); });
 }
 
 
@@ -585,14 +600,14 @@ function addProductRow(shouldFocus = true) {
         <td>
             <div class="qty-controls">
                 <button type="button" class="qty-btn" onclick="adjustQty(${rowCounter}, -1)">−</button>
-                <input type="number" class="qty-input" value="0" min="0" onchange="recalculate()">
+                <input type="number" class="qty-input" value="1" min="0" oninput="recalculate()">
                 <button type="button" class="qty-btn" onclick="adjustQty(${rowCounter}, 1)">+</button>
             </div>
         </td>
         <td>
             <div class="qty-controls">
                 <button type="button" class="qty-btn" onclick="adjustRate(${rowCounter}, -1)">−</button>
-                <input type="number" class="rate-input" value="0" step="0.01" onchange="recalculate()">
+                <input type="number" class="rate-input" value="0" step="0.01" oninput="recalculate()">
                 <button type="button" class="qty-btn" onclick="adjustRate(${rowCounter}, 1)">+</button>
             </div>
         </td>
@@ -601,7 +616,7 @@ function addProductRow(shouldFocus = true) {
                 <option value="Nos">Nos</option><option value="Pcs">Pcs</option><option value="Kg">Kg</option>
             </select>
         </td>
-        <td><input type="number" class="invoice-input disc-input" value="0" step="0.01" onchange="recalculate()"></td>
+        <td><input type="number" class="invoice-input disc-input" value="0" step="0.01" oninput="recalculate()"></td>
         <td class="text-right amount-cell">0.00</td>
     `;
 
@@ -615,7 +630,8 @@ function removeProductRow(rowId) {
     if (isInvoiceReadOnly) return;
     const rows = document.querySelectorAll('tr.product-row');
     if (rows.length <= 1) return;
-    document.getElementById(`product-row-${rowId}`).remove();
+    const row = document.getElementById(`product-row-${rowId}`);
+    if (row) row.remove();
     renumberProductRows();
     recalculate();
 }
@@ -668,10 +684,8 @@ function recalculate() {
         const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
         const rate = parseFloat(row.querySelector('.rate-input').value) || 0;
         const disc = parseFloat(row.querySelector('.disc-input').value) || 0;
-        
         let amount = qty * rate;
         if (disc > 0) amount -= (amount * disc / 100);
-        
         row.querySelector('.amount-cell').textContent = amount.toFixed(2);
         subtotal += amount;
         totalQty += qty;
@@ -680,43 +694,62 @@ function recalculate() {
     document.getElementById('total-qty').textContent = totalQty;
     document.getElementById('subtotal-amount').textContent = subtotal.toFixed(2);
     
-    // Tax Logic
     const taxType = document.querySelector('input[name="tax-type"]:checked');
-    let taxRate = 12; 
+    let taxRate = 12; // Default
     if (taxType) {
+        if (taxType.value === 'custom') taxRate = parseFloat(document.getElementById('custom-tax-rate').value) || 0;
         if (taxType.value === 'none') taxRate = 0;
-        else if (taxType.value === 'custom') taxRate = parseFloat(document.getElementById('custom-tax-rate').value) || 0;
     }
     
-    const taxAmount = subtotal * (taxRate / 100);
+    const taxAmount = subtotal * taxRate / 100;
     const grandTotal = subtotal + taxAmount;
     
-    document.getElementById('tax-amount-display').textContent = taxAmount.toFixed(2);
-    document.getElementById('grand-total-display').textContent = '₹ ' + grandTotal.toFixed(2);
+    const taxEl = document.getElementById('tax-amount-display');
+    if(taxEl) taxEl.textContent = taxAmount.toFixed(2);
     
-    updateTaxSummary(subtotal, taxRate, taxAmount);
-
-    // FIXED: Trigger the word conversion at the end of every recalculation
+    const grandEl = document.getElementById('grand-total-display');
+    if(grandEl) grandEl.textContent = '₹ ' + grandTotal.toFixed(2);
+    
+    updateTaxSummary(subtotal, taxRate, taxAmount, taxType ? taxType.value : 'igst');
     updateAmountWords(grandTotal, taxAmount);
 }
 
-function updateAmountWords(total, tax) {
-    // 1. Update Grand Total Words
-    fetch(`/api/number-to-words?amount=${total.toFixed(2)}`)
-        .then(r => r.json())
-        .then(data => {
-            const el = document.getElementById('amount-words');
-            if (el) el.textContent = data.words;
-        });
-
-    // 2. Update Tax Amount Words
-    fetch(`/api/number-to-words?amount=${tax.toFixed(2)}`)
-        .then(r => r.json())
-        .then(data => {
-            const el = document.getElementById('tax-words');
-            if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
-        });
+function updateTaxSummary(subtotal, taxRate, taxAmount, taxType) {
+    const tbody = document.getElementById('tax-summary-tbody');
+    if (!tbody) return;
+    
+    const hsnMap = {};
+    document.querySelectorAll('tr.product-row').forEach(row => {
+        const hsn = row.querySelector('.hsn-input').value || '-';
+        const amount = parseFloat(row.querySelector('.amount-cell').textContent) || 0;
+        if (amount > 0) hsnMap[hsn] = (hsnMap[hsn] || 0) + amount;
+    });
+    
+    let html = '';
+    Object.keys(hsnMap).forEach(hsn => {
+        const taxable = hsnMap[hsn];
+        const tax = taxable * taxRate / 100;
+        html += `<tr><td>${hsn}</td><td>${taxable.toFixed(2)}</td><td>${taxRate}%</td><td>${tax.toFixed(2)}</td><td>${tax.toFixed(2)}</td></tr>`;
+    });
+    
+    tbody.innerHTML = html;
 }
+
+function updateAmountWords(grandTotal, taxAmount) {
+    // Update Total Words
+    fetch(`/api/number-to-words?amount=${grandTotal}`).then(r => r.json()).then(data => {
+        const el = document.getElementById('amount-words');
+        if (el) el.textContent = data.words;
+    });
+
+    // Update Tax Words
+    fetch(`/api/number-to-words?amount=${taxAmount}`).then(r => r.json()).then(data => {
+        const el = document.getElementById('tax-words');
+        if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
+    });
+}
+
+
 // ============================================================
 // TAX SELECTOR
 // ============================================================
@@ -736,8 +769,9 @@ function setupTaxSelector() {
 // ============================================================
 function fetchNextInvoiceNumber() {
     fetch('/api/invoices/next-number').then(parseApiResponse).then(data => {
-        document.getElementById('invoice-no').value = data.invoice_no;
-    });
+        const input = document.getElementById('invoice-no');
+        if(input) input.value = data.invoice_no;
+    }).catch(() => {});
 }
 
 function setDefaultDateTime() {
@@ -775,28 +809,7 @@ function collectInvoicePayload() {
         invoice_date: document.getElementById('invoice-date').value,
         buyer_name: document.getElementById('bill-name').value,
         buyer_address: document.getElementById('bill-address').value,
-        buyer_state: document.getElementById('bill-state')?.value || '',
-        buyer_state_code: document.getElementById('bill-state-code')?.textContent || '',
         buyer_gstin: document.getElementById('bill-gstin').value,
-        ship_to_name: document.getElementById('ship-name').value,
-        ship_to_address: document.getElementById('ship-address').value,
-        ship_to_state: document.getElementById('ship-state')?.value || '',
-        ship_to_state_code: document.getElementById('ship-state-code')?.textContent || '',
-        ship_to_gstin: document.getElementById('ship-gstin').value,
-        delivery_note: document.getElementById('delivery-note').value,
-        payment_mode: document.getElementById('payment-mode').value,
-        reference_no: document.getElementById('reference-no').value,
-        other_references: document.getElementById('other-ref').value,
-        buyer_order_no: document.getElementById('buyer-order-no').value,
-        buyer_order_date: document.getElementById('buyer-order-date').value,
-        dispatch_doc_no: document.getElementById('dispatch-doc-no').value,
-        delivery_note_date: document.getElementById('delivery-note-date').value,
-        dispatched_through: document.getElementById('dispatched-through').value,
-        destination: document.getElementById('destination').value,
-        terms_of_delivery: document.getElementById('terms-delivery').value,
-        tax_type: document.querySelector('input[name="tax-type"]:checked')?.value || 'igst',
-        custom_tax_rate: parseFloat(document.getElementById('custom-tax-rate').value) || 0,
-        subtotal: parseFloat(document.getElementById('subtotal-amount').textContent) || 0,
         tax_amount: parseFloat(document.getElementById('tax-amount-display').textContent) || 0,
         grand_total: parseFloat(document.getElementById('grand-total-display').textContent.replace(/[^0-9.-]/g, '')) || 0,
         items
@@ -815,7 +828,7 @@ function saveInvoice(showSuccessToast = true) {
     .then(parseApiResponse)
     .then(result => {
         currentInvoiceId = result.invoice_id || currentInvoiceId;
-        if (showSuccessToast) showToast(`Invoice ${result.mode === 'updated' ? 'updated' : 'saved'} successfully`);
+        if (showSuccessToast) showToast(`Invoice saved successfully`);
         loadSavedInvoices();
         return result;
     })
@@ -848,7 +861,8 @@ function loadSavedInvoices() {
 }
 
 function loadInvoice(id, readOnly = false) {
-    fetch(`/api/invoices/${id}`).then(parseApiResponse).then(inv => {
+    fetch(`/api/invoices/${id}`).then(parseApiResponse).then(res => {
+        const inv = res.invoice;
         currentInvoiceId = inv.id;
         switchToPanel('invoice-panel');
         document.getElementById('invoice-no').value = inv.invoice_no || '';
@@ -856,22 +870,17 @@ function loadInvoice(id, readOnly = false) {
         document.getElementById('bill-name').value = inv.buyer_name || '';
         document.getElementById('bill-address').value = inv.buyer_address || '';
         document.getElementById('bill-gstin').value = inv.buyer_gstin || '';
-        if (document.getElementById('bill-state')) {
-            document.getElementById('bill-state').value = inv.buyer_state || '';
-            updateStateCode('bill');
-        }
         
         const tbody = document.getElementById('product-tbody');
         tbody.innerHTML = ''; rowCounter = 0;
-        inv.items.forEach(item => {
+        res.items.forEach(item => {
             addProductRow(false);
             const row = document.getElementById(`product-row-${rowCounter}`);
             row.querySelector('.desc-input').value = item.description;
             row.querySelector('.hsn-input').value = item.hsn;
             row.querySelector('.qty-input').value = item.quantity;
             row.querySelector('.rate-input').value = item.rate;
-            row.querySelector('.per-input').value = item.per_unit;
-            row.querySelector('.disc-input').value = item.discount_percent;
+            row.querySelector('.amount-cell').textContent = item.amount;
         });
         recalculate();
         setInvoiceReadOnly(readOnly);
@@ -892,24 +901,27 @@ function printInvoice() { window.print(); }
 function downloadPDF() {
     showToast('Generating PDF...');
     saveInvoice(false).then(result => {
-        window.open(`/api/invoices/${result.invoice_id || currentInvoiceId}/pdf`, '_blank');
+        const id = result.invoice_id || currentInvoiceId;
+        window.location.href = `/api/invoices/${id}/pdf`;
     });
 }
 
 
 // ============================================================
-// NEW INVOICE — Reset form
+// NEW INVOICE — Reset form but keep company info
 // ============================================================
 function newInvoice() {
     currentInvoiceId = null;
     setInvoiceReadOnly(false);
-    document.querySelectorAll('#invoice-panel input, #invoice-panel textarea').forEach(el => el.value = '');
+    // Reset inputs EXCEPT owner/company info
+    document.querySelectorAll('#invoice-panel input:not([id^="owner-"]), #invoice-panel textarea:not([id^="owner-"])').forEach(el => el.value = '');
     document.getElementById('product-tbody').innerHTML = ''; rowCounter = 0;
     addProductRow(false);
     fetchNextInvoiceNumber();
     setDefaultDateTime();
     recalculate();
     switchToPanel('invoice-panel');
+    showToast('New invoice started');
 }
 
 
@@ -918,6 +930,7 @@ function newInvoice() {
 // ============================================================
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
+    if(!toast) return;
     toast.textContent = message;
     toast.className = 'toast show' + (isError ? ' error' : '');
     setTimeout(() => toast.className = 'toast', 3000);

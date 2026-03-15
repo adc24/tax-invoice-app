@@ -29,27 +29,10 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 # ============================================================
 # CONFIG & DATABASE
 # ============================================================
-# RESTORED: Full Indian States list for automatic code fetching
 INDIAN_STATES = [
-    {"name": "Jammu & Kashmir", "code": "01"}, {"name": "Himachal Pradesh", "code": "02"},
-    {"name": "Punjab", "code": "03"}, {"name": "Chandigarh", "code": "04"},
-    {"name": "Uttarakhand", "code": "05"}, {"name": "Haryana", "code": "06"},
-    {"name": "Delhi", "code": "07"}, {"name": "Rajasthan", "code": "08"},
-    {"name": "Uttar Pradesh", "code": "09"}, {"name": "Bihar", "code": "10"},
-    {"name": "Sikkim", "code": "11"}, {"name": "Arunachal Pradesh", "code": "12"},
-    {"name": "Nagaland", "code": "13"}, {"name": "Manipur", "code": "14"},
-    {"name": "Mizoram", "code": "15"}, {"name": "Tripura", "code": "16"},
-    {"name": "Meghalaya", "code": "17"}, {"name": "Assam", "code": "18"},
-    {"name": "West Bengal", "code": "19"}, {"name": "Jharkhand", "code": "20"},
-    {"name": "Odisha", "code": "21"}, {"name": "Chhattisgarh", "code": "22"},
-    {"name": "Madhya Pradesh", "code": "23"}, {"name": "Gujarat", "code": "24"},
-    {"name": "Daman & Diu", "code": "25"}, {"name": "Dadra & Nagar Haveli", "code": "26"},
-    {"name": "Maharashtra", "code": "27"}, {"name": "Andhra Pradesh (Old)", "code": "28"},
-    {"name": "Karnataka", "code": "29"}, {"name": "Goa", "code": "30"},
-    {"name": "Lakshadweep", "code": "31"}, {"name": "Kerala", "code": "32"},
-    {"name": "Tamil Nadu", "code": "33"}, {"name": "Puducherry", "code": "34"},
-    {"name": "Andaman & Nicobar Islands", "code": "35"}, {"name": "Telangana", "code": "36"},
-    {"name": "Andhra Pradesh (New)", "code": "37"}
+    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
+    {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
+    {"name": "Maharashtra", "code": "27"}, {"name": "Tamil Nadu", "code": "33"}
 ]
 
 if not os.path.exists("data"):
@@ -76,10 +59,9 @@ def init_db():
 
 init_db()
 
-# --- HELPER: NUMBER TO WORDS ---
 def number_to_words(amount):
+    """Converts numeric amount to Indian Rupee words with proper Paise handling."""
     try:
-        # Rounding to 2 decimal places is essential for currency
         amount = round(float(amount or 0), 2)
         if amount <= 0: return "Indian Rupee Zero Only"
         
@@ -93,8 +75,10 @@ def number_to_words(amount):
                 paise_words = num2words(paise, lang='en_IN').title()
                 res += f" and {paise_words} Paise"
             return res + " Only"
-        return f"Indian Rupee {amount} Only"
-    except:
+        else:
+            # Fallback if num2words is missing
+            return f"Indian Rupee {amount} Only"
+    except Exception:
         return "Indian Rupee Zero Only"
 
 # ============================================================
@@ -104,11 +88,9 @@ def number_to_words(amount):
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
-# FIXED: Added default '0' as string and ensured logic matches JS fetch
 @app.route('/api/number-to-words')
 def api_words():
-    # Use request.args to get the amount from the URL
-    amount = request.args.get('amount', '0')
+    amount = request.args.get('amount', 0)
     return jsonify({"words": number_to_words(amount)})
 
 # --- CUSTOMERS ---
@@ -177,13 +159,17 @@ def handle_invoices():
     res = db.execute("SELECT * FROM invoices ORDER BY id DESC").fetchall()
     return jsonify([dict(row) for row in res])
 
-@app.route('/api/invoices/<int:id>', methods=['DELETE'])
-def delete_invoice(id):
+@app.route('/api/invoices/<int:id>', methods=['GET', 'DELETE'])
+def handle_single_invoice(id):
     db = get_db()
-    db.execute("DELETE FROM invoices WHERE id=?", (id,))
-    db.execute("DELETE FROM invoice_items WHERE invoice_id=?", (id,))
-    db.commit()
-    return jsonify({"status": "success"})
+    if request.method == 'DELETE':
+        db.execute("DELETE FROM invoices WHERE id=?", (id,))
+        db.execute("DELETE FROM invoice_items WHERE invoice_id=?", (id,))
+        db.commit()
+        return jsonify({"status": "success"})
+    invoice = db.execute("SELECT * FROM invoices WHERE id=?", (id,)).fetchone()
+    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (id,)).fetchall()
+    return jsonify({"invoice": dict(invoice) if invoice else None, "items": [dict(i) for i in items]})
 
 @app.route('/api/owner', methods=['GET', 'POST'])
 def handle_owner():
@@ -203,11 +189,19 @@ def generate_pdf(inv_id):
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (inv_id,)).fetchall()
     owner = db.execute("SELECT * FROM owner_info LIMIT 1").fetchone()
     
+    if not invoice:
+        return "Invoice not found", 404
+
+    # Fix: Ensure words are calculated for both Total and Tax
     g_words = number_to_words(invoice['grand_total'])
     t_words = number_to_words(invoice['tax_amount'])
 
-    html = render_template('invoice_print.html', invoice=dict(invoice), owner=dict(owner) if owner else {}, 
-                           items=[dict(i) for i in items], grand_total_words=g_words, tax_amount_words=t_words)
+    html = render_template('invoice_print.html', 
+                           invoice=dict(invoice), 
+                           owner=dict(owner) if owner else {}, 
+                           items=[dict(i) for i in items], 
+                           grand_total_words=g_words, 
+                           tax_amount_words=t_words)
     
     if WEASY_AVAILABLE:
         pdf = WeasyHTML(string=html).write_pdf()
