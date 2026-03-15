@@ -680,9 +680,9 @@ function recalculate() {
     document.getElementById('total-qty').textContent = totalQty;
     document.getElementById('subtotal-amount').textContent = subtotal.toFixed(2);
     
-    // Get tax rate from the selected radio button
+    // Tax Logic
     const taxType = document.querySelector('input[name="tax-type"]:checked');
-    let taxRate = 12; // Default logic seen in your Tax Summary
+    let taxRate = 12; 
     if (taxType) {
         if (taxType.value === 'none') taxRate = 0;
         else if (taxType.value === 'custom') taxRate = parseFloat(document.getElementById('custom-tax-rate').value) || 0;
@@ -694,35 +694,28 @@ function recalculate() {
     document.getElementById('tax-amount-display').textContent = taxAmount.toFixed(2);
     document.getElementById('grand-total-display').textContent = '₹ ' + grandTotal.toFixed(2);
     
-    // Update Tax Summary table
     updateTaxSummary(subtotal, taxRate, taxAmount);
 
-    // CRITICAL FIX: Pass clean raw numbers to the word converter
+    // FIXED: Trigger the word conversion at the end of every recalculation
     updateAmountWords(grandTotal, taxAmount);
 }
 
 function updateAmountWords(total, tax) {
-    // Ensure we are sending valid numbers, not strings with symbols
-    const cleanTotal = parseFloat(total).toFixed(2);
-    const cleanTax = parseFloat(tax).toFixed(2);
-
     // 1. Update Grand Total Words
-    fetch(`/api/number-to-words?amount=${cleanTotal}`)
+    fetch(`/api/number-to-words?amount=${total.toFixed(2)}`)
         .then(r => r.json())
         .then(data => {
             const el = document.getElementById('amount-words');
             if (el) el.textContent = data.words;
-        })
-        .catch(err => console.error("Error fetching total words:", err));
+        });
 
     // 2. Update Tax Amount Words
-    fetch(`/api/number-to-words?amount=${cleanTax}`)
+    fetch(`/api/number-to-words?amount=${tax.toFixed(2)}`)
         .then(r => r.json())
         .then(data => {
             const el = document.getElementById('tax-words');
             if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
-        })
-        .catch(err => console.error("Error fetching tax words:", err));
+        });
 }
 // ============================================================
 // TAX SELECTOR
