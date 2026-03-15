@@ -59,18 +59,26 @@ def init_db():
 
 init_db()
 
+# --- HELPER: NUMBER TO WORDS ---
 def number_to_words(amount):
     try:
+        # Rounding to 2 decimal places is essential for currency
         amount = round(float(amount or 0), 2)
         if amount <= 0: return "Indian Rupee Zero Only"
+        
         rupees = int(amount)
         paise = int(round((amount - rupees) * 100))
-        words = num2words(rupees, lang='en_IN').title()
-        if paise > 0:
-            paise_words = num2words(paise, lang='en_IN').title()
-            return f"Indian Rupee {words} and {paise_words} Paise Only"
-        return f"Indian Rupee {words} Only"
-    except: return "Indian Rupee Zero Only"
+        
+        if NUM2WORDS_AVAILABLE:
+            words = num2words(rupees, lang='en_IN').title()
+            res = f"Indian Rupee {words}"
+            if paise > 0:
+                paise_words = num2words(paise, lang='en_IN').title()
+                res += f" and {paise_words} Paise"
+            return res + " Only"
+        return f"Indian Rupee {amount} Only"
+    except:
+        return "Indian Rupee Zero Only"
 
 # ============================================================
 # ROUTES
@@ -78,6 +86,12 @@ def number_to_words(amount):
 @app.route('/')
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
+
+@app.route('/api/number-to-words')
+def api_words():
+    # Use request.args to get the amount from the URL
+    amount = request.args.get('amount', 0)
+    return jsonify({"words": number_to_words(amount)})
 
 # --- CUSTOMERS ---
 @app.route('/api/customers', methods=['GET', 'POST'])

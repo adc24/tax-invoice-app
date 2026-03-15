@@ -668,8 +668,10 @@ function recalculate() {
         const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
         const rate = parseFloat(row.querySelector('.rate-input').value) || 0;
         const disc = parseFloat(row.querySelector('.disc-input').value) || 0;
+        
         let amount = qty * rate;
         if (disc > 0) amount -= (amount * disc / 100);
+        
         row.querySelector('.amount-cell').textContent = amount.toFixed(2);
         subtotal += amount;
         totalQty += qty;
@@ -678,49 +680,44 @@ function recalculate() {
     document.getElementById('total-qty').textContent = totalQty;
     document.getElementById('subtotal-amount').textContent = subtotal.toFixed(2);
     
+    // Get tax rate from the selected radio button
     const taxType = document.querySelector('input[name="tax-type"]:checked');
-    let taxRate = (taxType && taxType.value === 'custom') ? parseFloat(document.getElementById('custom-tax-rate').value) || 0 : 12;
-    if (taxType && taxType.value === 'none') taxRate = 0;
+    let taxRate = 12; // Default
+    if (taxType) {
+        if (taxType.value === 'none') taxRate = 0;
+        else if (taxType.value === 'custom') taxRate = parseFloat(document.getElementById('custom-tax-rate').value) || 0;
+    }
     
-    const taxAmount = subtotal * taxRate / 100;
+    const taxAmount = subtotal * (taxRate / 100);
     const grandTotal = subtotal + taxAmount;
     
     document.getElementById('tax-amount-display').textContent = taxAmount.toFixed(2);
     document.getElementById('grand-total-display').textContent = '₹ ' + grandTotal.toFixed(2);
     
-    updateTaxSummary(subtotal, taxRate, taxAmount, taxType ? taxType.value : 'igst');
+    // Update Tax Summary table
+    updateTaxSummary(subtotal, taxRate, taxAmount);
+
+    // CRITICAL: Pass raw numbers to the word converter
     updateAmountWords(grandTotal, taxAmount);
 }
 
-function updateTaxSummary(subtotal, taxRate, taxAmount, taxType) {
-    const tbody = document.getElementById('tax-summary-tbody');
-    if (!tbody) return;
-    
-    const hsnMap = {};
-    document.querySelectorAll('tr.product-row').forEach(row => {
-        const hsn = row.querySelector('.hsn-input').value || '-';
-        const amount = parseFloat(row.querySelector('.amount-cell').textContent) || 0;
-        if (amount > 0) hsnMap[hsn] = (hsnMap[hsn] || 0) + amount;
-    });
-    
-    let html = '';
-    Object.keys(hsnMap).forEach(hsn => {
-        const taxable = hsnMap[hsn];
-        const tax = taxable * taxRate / 100;
-        html += `<tr><td>${hsn}</td><td>${taxable.toFixed(2)}</td><td>${taxRate}%</td><td>${tax.toFixed(2)}</td><td>${tax.toFixed(2)}</td></tr>`;
-    });
-    
-    tbody.innerHTML = html;
+function updateAmountWords(total, tax) {
+    // 1. Fetch words for Grand Total
+    fetch(`/api/number-to-words?amount=${total.toFixed(2)}`)
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('amount-words');
+            if (el) el.textContent = data.words;
+        });
+
+    // 2. Fetch words for Tax Amount
+    fetch(`/api/number-to-words?amount=${tax.toFixed(2)}`)
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('tax-words');
+            if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
+        });
 }
-
-function updateAmountWords(grandTotal, taxAmount) {
-    fetch(`/api/number-to-words?amount=${grandTotal}`).then(r => r.json()).then(data => {
-        const el = document.getElementById('amount-words');
-        if (el) el.textContent = data.words;
-    });
-}
-
-
 // ============================================================
 // TAX SELECTOR
 // ============================================================
