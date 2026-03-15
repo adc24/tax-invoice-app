@@ -330,22 +330,26 @@
 
             <!-- Tax Summary Table -->
             <table class="tax-summary-table">
-                <thead id="tax-summary-thead">
-                    <tr>
-                        <th rowspan="2">HSN/SAC</th>
-                        <th rowspan="2">Taxable Value</th>
-                        <th colspan="2">Integrated Tax</th>
-                        <th rowspan="2">Total Tax Amount</th>
-                    </tr>
-                    <tr>
-                        <th>Rate</th><th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody id="tax-summary-tbody"></tbody>
-            </table>
-
-            <!-- Tax amount in words -->
-            <div class="tax-words" id="tax-words">Tax Amount (in words) : Indian Rupee Zero Only</div>
+    <thead id="tax-summary-thead">
+        <tr>
+            <th rowspan="2">HSN/SAC</th>
+            <th rowspan="2">Taxable Value</th>
+            <th colspan="2">Integrated Tax</th>
+            <th rowspan="2">Total Tax Amount</th>
+        </tr>
+        <tr>
+            <th>Rate</th><th>Amount</th>
+        </tr>
+    </thead>
+    <tbody id="tax-summary-tbody"></tbody>
+    <tfoot>
+        <tr>
+            <td colspan="5" style="text-align: left; padding: 5px 10px; font-weight: bold;">
+                Tax Amount (in words) : <span id="tax-words-dynamic">Indian Rupee Zero Only</span>
+            </td>
+        </tr>
+    </tfoot>
+</table>
 
             <!-- Declaration + Signatory -->
             <div class="invoice-footer-bottom">

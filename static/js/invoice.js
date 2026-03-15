@@ -735,18 +735,27 @@ function updateTaxSummary(subtotal, taxRate, taxAmount, taxType) {
     tbody.innerHTML = html;
 }
 
-function updateAmountWords(grandTotal, taxAmount) {
-    // Update Total Words
-    fetch(`/api/number-to-words?amount=${grandTotal}`).then(r => r.json()).then(data => {
-        const el = document.getElementById('amount-words');
-        if (el) el.textContent = data.words;
-    });
+function updateAmountWords(total, tax) {
+    const totalVal = parseFloat(total).toFixed(2);
+    const taxVal = parseFloat(tax).toFixed(2);
 
-    // Update Tax Words
-    fetch(`/api/number-to-words?amount=${taxAmount}`).then(r => r.json()).then(data => {
-        const el = document.getElementById('tax-words');
-        if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
-    });
+    // 1. Update Grand Total Words (top section)
+    fetch(`/api/number-to-words?amount=${totalVal}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('amount-words').textContent = data.words;
+        });
+
+    // 2. Update Tax Amount Words (INSIDE the summary table footer)
+    fetch(`/api/number-to-words?amount=${taxVal}`)
+        .then(r => r.json())
+        .then(data => {
+            // FIXED: Target the new ID inside the table footer
+            const taxWordsEl = document.getElementById('tax-words-dynamic');
+            if (taxWordsEl) {
+                taxWordsEl.textContent = data.words;
+            }
+        });
 }
 
 

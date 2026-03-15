@@ -596,6 +596,14 @@ body {
     font-weight: 700;
 }
 
+.tax-summary-table tfoot td {
+    border: 1px solid #1A1A1A;
+    background-color: #ffffff;
+    font-size: 11px;
+    height: 30px;
+    vertical-align: middle;
+}
+
 /* Tax words row */
 .tax-words {
     padding: 4px 10px;
