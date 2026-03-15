@@ -621,8 +621,17 @@ function addProductRow(shouldFocus = true) {
         </td>
         <td>
             <select class="invoice-select per-input" onchange="recalculate()">
-                <option value="Nos">Nos</option><option value="Pcs">Pcs</option><option value="Kg">Kg</option>
-            </select>
+    <option value="Nos">Nos</option>
+    <option value="Pcs">Pcs</option>
+    <option value="Kg">Kg</option>
+    <option value="Box">Box</option>
+    <option value="Pkt">Pkt</option>
+    <option value="Ltr">Ltr</option>
+    <option value="Mtr">Mtr</option>
+    <option value="Set">Set</option>
+    <option value="Roll">Roll</option>
+    <option value="Bag">Bag</option>
+</select>
         </td>
         <td><input type="number" class="invoice-input disc-input" value="0" step="0.01" oninput="recalculate()"></td>
         <td class="text-right amount-cell">0.00</td>
@@ -785,10 +794,13 @@ function setupTaxSelector() {
 // INVOICE NUMBER & DATE
 // ============================================================
 function fetchNextInvoiceNumber() {
-    fetch('/api/invoices/next-number').then(parseApiResponse).then(data => {
-        const input = document.getElementById('invoice-no');
-        if(input) input.value = data.invoice_no;
-    }).catch(() => {});
+    fetch('/api/invoices/next-number')
+        .then(r => r.json())
+        .then(data => {
+            const input = document.getElementById('invoice-no');
+            // Only auto-fill if the input is currently empty
+            if (!input.value) input.value = data.invoice_no;
+        });
 }
 
 function setDefaultDateTime() {
