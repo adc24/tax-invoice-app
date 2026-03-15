@@ -682,7 +682,7 @@ function recalculate() {
     
     // Get tax rate from the selected radio button
     const taxType = document.querySelector('input[name="tax-type"]:checked');
-    let taxRate = 12; // Default
+    let taxRate = 12; // Default logic seen in your Tax Summary
     if (taxType) {
         if (taxType.value === 'none') taxRate = 0;
         else if (taxType.value === 'custom') taxRate = parseFloat(document.getElementById('custom-tax-rate').value) || 0;
@@ -697,26 +697,32 @@ function recalculate() {
     // Update Tax Summary table
     updateTaxSummary(subtotal, taxRate, taxAmount);
 
-    // CRITICAL: Pass raw numbers to the word converter
+    // CRITICAL FIX: Pass clean raw numbers to the word converter
     updateAmountWords(grandTotal, taxAmount);
 }
 
 function updateAmountWords(total, tax) {
-    // 1. Fetch words for Grand Total
-    fetch(`/api/number-to-words?amount=${total.toFixed(2)}`)
+    // Ensure we are sending valid numbers, not strings with symbols
+    const cleanTotal = parseFloat(total).toFixed(2);
+    const cleanTax = parseFloat(tax).toFixed(2);
+
+    // 1. Update Grand Total Words
+    fetch(`/api/number-to-words?amount=${cleanTotal}`)
         .then(r => r.json())
         .then(data => {
             const el = document.getElementById('amount-words');
             if (el) el.textContent = data.words;
-        });
+        })
+        .catch(err => console.error("Error fetching total words:", err));
 
-    // 2. Fetch words for Tax Amount
-    fetch(`/api/number-to-words?amount=${tax.toFixed(2)}`)
+    // 2. Update Tax Amount Words
+    fetch(`/api/number-to-words?amount=${cleanTax}`)
         .then(r => r.json())
         .then(data => {
             const el = document.getElementById('tax-words');
             if (el) el.textContent = 'Tax Amount (in words) : ' + data.words;
-        });
+        })
+        .catch(err => console.error("Error fetching tax words:", err));
 }
 // ============================================================
 // TAX SELECTOR

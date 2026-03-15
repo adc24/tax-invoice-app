@@ -29,10 +29,27 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 # ============================================================
 # CONFIG & DATABASE
 # ============================================================
+# RESTORED: Full Indian States list for automatic code fetching
 INDIAN_STATES = [
-    {"name": "Andhra Pradesh", "code": "37"}, {"name": "Karnataka", "code": "29"},
-    {"name": "Meghalaya", "code": "17"}, {"name": "Delhi", "code": "07"},
-    {"name": "Maharashtra", "code": "27"}, {"name": "Tamil Nadu", "code": "33"}
+    {"name": "Jammu & Kashmir", "code": "01"}, {"name": "Himachal Pradesh", "code": "02"},
+    {"name": "Punjab", "code": "03"}, {"name": "Chandigarh", "code": "04"},
+    {"name": "Uttarakhand", "code": "05"}, {"name": "Haryana", "code": "06"},
+    {"name": "Delhi", "code": "07"}, {"name": "Rajasthan", "code": "08"},
+    {"name": "Uttar Pradesh", "code": "09"}, {"name": "Bihar", "code": "10"},
+    {"name": "Sikkim", "code": "11"}, {"name": "Arunachal Pradesh", "code": "12"},
+    {"name": "Nagaland", "code": "13"}, {"name": "Manipur", "code": "14"},
+    {"name": "Mizoram", "code": "15"}, {"name": "Tripura", "code": "16"},
+    {"name": "Meghalaya", "code": "17"}, {"name": "Assam", "code": "18"},
+    {"name": "West Bengal", "code": "19"}, {"name": "Jharkhand", "code": "20"},
+    {"name": "Odisha", "code": "21"}, {"name": "Chhattisgarh", "code": "22"},
+    {"name": "Madhya Pradesh", "code": "23"}, {"name": "Gujarat", "code": "24"},
+    {"name": "Daman & Diu", "code": "25"}, {"name": "Dadra & Nagar Haveli", "code": "26"},
+    {"name": "Maharashtra", "code": "27"}, {"name": "Andhra Pradesh (Old)", "code": "28"},
+    {"name": "Karnataka", "code": "29"}, {"name": "Goa", "code": "30"},
+    {"name": "Lakshadweep", "code": "31"}, {"name": "Kerala", "code": "32"},
+    {"name": "Tamil Nadu", "code": "33"}, {"name": "Puducherry", "code": "34"},
+    {"name": "Andaman & Nicobar Islands", "code": "35"}, {"name": "Telangana", "code": "36"},
+    {"name": "Andhra Pradesh (New)", "code": "37"}
 ]
 
 if not os.path.exists("data"):
@@ -87,10 +104,11 @@ def number_to_words(amount):
 def index():
     return render_template('invoice.html', states=INDIAN_STATES)
 
+# FIXED: Added default '0' as string and ensured logic matches JS fetch
 @app.route('/api/number-to-words')
 def api_words():
     # Use request.args to get the amount from the URL
-    amount = request.args.get('amount', 0)
+    amount = request.args.get('amount', '0')
     return jsonify({"words": number_to_words(amount)})
 
 # --- CUSTOMERS ---
